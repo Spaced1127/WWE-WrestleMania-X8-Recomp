@@ -37,6 +37,7 @@ tools\finalize_release.ps1 -Module <gGW3E78_recomp.dll>   # folder + zip + hash
 
 Artifact: `dist\WrestleManiaX8Recomp-v0.1.0-Windows-x64.zip`
 SHA-256: `21EBA6A10B3D84D0E05AC31B16AE1D1C39D8BA89767102AFA1C696E20A6EB1AD`
+GitHub release: https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.0
 
 The launcher and runner are WMX8-branded, the static Clang module is the
 default core, and the generated controller profile uses the D-pad for menu
