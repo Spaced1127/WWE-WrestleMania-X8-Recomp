@@ -324,8 +324,8 @@ Two runtime fixes were needed for this title:
 Release artifact:
 
 ```
-dist\WrestleManiaX8Recomp-v0.1.0-Windows-x64.zip   19,565,601 bytes
-SHA-256 4CA3B6B5A884979C781FC2BA7AD85E877328CD8019D57C5E0752817D26C8D7D7
+dist\WrestleManiaX8Recomp-v0.1.0-Windows-x64.zip   19,566,392 bytes
+SHA-256 21EBA6A10B3D84D0E05AC31B16AE1D1C39D8BA89767102AFA1C696E20A6EB1AD
 ```
 
 Contents: launcher, runner, `gGW3E78_recomp.dll`, pruned `Sys/` (GC,
