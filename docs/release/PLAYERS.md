@@ -1,0 +1,85 @@
+# Players
+
+## Controls
+
+| Action | Keyboard | GameCube pad | Xbox pad | DualSense | Switch Pro |
+|---|---|---|---|---|---|
+| Move / menu cursor | WASD | Left stick | Left stick | Left stick | Left stick |
+| Taunt 1-4 | — | L1 + D-pad | LB + D-pad | L1 + D-pad | L + D-pad |
+| Menu cursor | — | D-pad | D-pad | D-pad | D-pad |
+| Switch target | IJKL | C-stick | Right stick | Right stick | Right stick |
+| A | Enter | A | A | Cross | B |
+| B | Backspace | B | B | Circle | A |
+| X | X | X | X | Square | Y |
+| Y | Y | Y | Y | Triangle | X |
+| Z | Left Shift | Z (R1) | RB | R1 | R |
+| L / R | Q / E | L / R | LT / RT | L2 / R2 | ZL / ZR |
+| Pause | Space | Start | Menu | Options | Plus |
+| Emulator menu | Esc | — | — | — | — |
+| Fullscreen | F11 | — | — | — | — |
+
+The original game ignores the D-pad in menus and uses it for taunts in a
+match. The default profile maps the D-pad to the menu cursor, so it navigates
+menus out of the box; **L1 + D-pad** still taunts. The stock layout
+(D-pad = taunt, menus = left stick) is in
+`defaults/GCPadNew.dualsense.ini`.
+
+Two players are supported (port 1 and port 2) for multiplayer modes.
+
+## Supported controllers
+
+The launcher detects every SDL gamepad and writes `GCPadNew.ini` with the
+exact device name, so you do not need a pre-made profile. The layout presets
+cover:
+
+- Xbox Series, Xbox One, Xbox 360 and generic XInput pads
+- DualSense, DualShock 4 and DualShock 3
+- Switch Pro Controller, Joy-Con, Switch Online pads and Wii U Pro Controller
+- Steam Deck
+- 8BitDo pads in XInput mode or Switch mode
+- The GameCube controller adapter
+- Keyboard (WASD)
+
+On the **CONTROLLER** page, select the active controller and choose a
+**Layout**:
+
+- **Auto-detect** is the default. It swaps A/B and X/Y for Switch, Joy-Con,
+  Wii U and other Nintendo-layout names; everything else uses the standard
+  Xbox/PlayStation layout.
+- **Xbox / PlayStation (standard)** forces the standard layout.
+- **Nintendo (A/B swap)** fixes a pad whose face buttons are swapped, such as
+  an 8BitDo pad in Switch mode.
+- **Keyboard (WASD)** writes the keyboard profile.
+
+Press **Use this controller** to rewrite the profile with the selected layout.
+Existing custom profiles are left alone until you do.
+
+## Save data
+
+The game uses a folder-based memory card (GCI). On first launch it asks to
+create System Data; accept once so Exhibition matches can start.
+
+```
+%LOCALAPPDATA%\WrestleManiaX8Recomp\GC\USA\Card A\
+```
+
+or, in portable mode, `User\GC\USA\Card A\` beside the executable.
+
+To bring saves from an emulator, copy the GCI files from your Dolphin memory
+card into that folder. Card images (`.raw`, `.mcd`) are not read directly.
+
+The launcher's PLAY page has a MEMORY CARD card: create the folder card, back
+it up to `Backups\CardA-<timestamp>`, import a `.gci`, or open the card folder.
+
+## Save states
+
+Press **F1** in the game window to save a state. The launcher lists, loads,
+deletes and reveals states from its StateSaves folder; saving is done in the
+runner because the launcher is closed while the game runs. States are not
+portable between builds of the recompiled module.
+
+## Known gaps
+
+- Only the 1v1 Exhibition path is tested end to end.
+- Audio is enabled but was not verified on every output device.
+- No texture, music or gameplay mods are included in v0.1.0.

@@ -1,0 +1,64 @@
+# --- game data: never commit ---
+*.iso
+*.rvz
+*.gcm
+*.wbfs
+*.dol
+*.rel
+*.elf
+*.gci
+*.sav
+*.state
+*.sel
+*.dff
+work/
+game_data/
+extracted/
+Game/
+files/
+
+# --- upstream source: clone into lib/ (see README) ---
+lib/
+
+# --- local guide checkout ---
+docs/reference/
+
+# --- third-party art downloaded from SteamGridDB (not redistributable) ---
+art/
+assets_src/
+
+# --- build output ---
+build/
+dist/
+generated/
+*.exe
+*.dll
+*.lib
+*.exp
+*.obj
+*.pdb
+*.ilk
+*.o
+*.a
+*.so
+*.dylib
+*.profraw
+*.profdata
+*.profdata.*
+
+# --- tool state ---
+tools/_guide/
+.external/
+__pycache__/
+*.pyc
+
+# --- local logs ---
+*.log
+*.dmp
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vs/
+.vscode/
+*.user

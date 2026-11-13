@@ -1,0 +1,7 @@
+"Time","Label","Core","FPS","VPS","Speed","Frames","CPUSeconds","State","Module"
+"2026-11-10 00:07:38","clang-o3-static","static","59.9404","59.9399","1.00174","11260","46.40625","work\states\match.sav","gGW3E78_recomp.dll"
+"2026-11-13 01:14:04","fatal4-static-1080p","static","54.8256","54.8373","0.919552","14786","142.5625","work\states\fatal4.sav","gGW3E78_recomp.dll"
+"2026-11-13 01:15:16","fatal4-static-low","static","43.4723","43.5042","0.741619","15403","50.359375","work\states\fatal4.sav","gGW3E78_recomp.dll"
+"2026-11-13 01:16:35","fatal4-jit-1080p","jit","59.9423","59.9401","1","15454","37.859375","work\states\fatal4.sav","gGW3E78_recomp.dll"
+"2026-11-13 01:28:10","fatal4-opt-1080p","static","59.9912","59.9997","1.00677","15776","47.84375","work\states\fatal4.sav","gGW3E78_recomp.dll"
+"2026-11-13 01:29:50","1v1-opt-1080p","static","59.9469","59.9401","1.00037","11344","46.328125","work\states\match.sav","gGW3E78_recomp.dll"
