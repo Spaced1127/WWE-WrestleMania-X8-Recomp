@@ -1,5 +1,5 @@
 WWE WrestleMania X8
-Standalone PC port (static recompilation) - Windows x64 - v0.1.0
+Standalone PC port (static recompilation) - Windows x64 - v0.1.1
 ================================================================
 
 This package contains NO game data. There is no disc image, no ROM, no
@@ -193,10 +193,10 @@ D-pad does nothing in menus
     D-pad profile, or move the left stick.
 
 
-KNOWN LIMITATIONS (v0.1.0)
+KNOWN LIMITATIONS (v0.1.1)
 --------------------------
-  * Tested end to end as a 1v1 Exhibition match. Fatal 4 Way, Battle Royal,
-    entrances and a full match to a finish are not covered by the release test.
+  * 1v1 and Fatal 4 Way are tested end to end. Battle Royal, every entrance
+    and a full match to a finish are not exhaustively tested.
   * Audio is enabled and uses Cubeb, but was not listened to on every output
     device.
   * No texture, music or gameplay mods are included.

@@ -23,21 +23,21 @@ git-ignored.
 | Performance | **59.94 fps / speed 1.00 in-match (Clang `-O3`)** |
 | PGO | optional headroom, not started |
 | Branded launcher / runner | done |
-| v0.1.0 release zip | done, no game data |
+| v0.1.1 release zip | done, no game data |
 
 See [`docs/STATE.md`](docs/STATE.md) for the full inventory, evidence paths,
 save-state checkpoints and open issues.
 
-## v0.1.0 release
+## v0.1.1 release
 
 ```powershell
 tools\build_launcher.bat        # WrestleManiaX8Recomp.exe + ...Runner.exe
 tools\finalize_release.ps1 -Module <gGW3E78_recomp.dll>   # folder + zip + hash
 ```
 
-Artifact: `dist\WrestleManiaX8Recomp-v0.1.0-Windows-x64.zip`
-SHA-256: `21EBA6A10B3D84D0E05AC31B16AE1D1C39D8BA89767102AFA1C696E20A6EB1AD`
-GitHub release: https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.0
+Artifact: `dist\WrestleManiaX8Recomp-v0.1.1-Windows-x64.zip`
+SHA-256: `85887C822B074BDF73B2A9A0C9A28FCBDEEF75E6CD3590DC1205515A8C272E8B`
+GitHub release: https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.1
 
 The launcher and runner are WMX8-branded, the static Clang module is the
 default core, and the generated controller profile uses the D-pad for menu

@@ -41,7 +41,8 @@
         "resolution": "1920x1080",
         "backend": "Vulkan",
         "efb_access": "true",
-        "cpu_core": "static"
+        "cpu_core": "static",
+        "controller_layout": "auto"
       },
       "always": {
         "efb_access": "true",
@@ -62,7 +63,8 @@
         "mute": "false",
         "volume": "100",
         "emulation_speed": "1",
-        "cpu_core": "static"
+        "cpu_core": "static",
+        "controller_layout": "auto"
       }
     }
   ],
@@ -82,6 +84,41 @@
           "args": ["--core", "jit"]
         }
       ]
+    },
+    {
+      "id": "controller_layout",
+      "label": "Controller layout",
+      "in": "main",
+      "help": "Auto detects Xbox, PlayStation, Switch/Joy-Con and generic pads. Choose Nintendo if the face buttons are swapped.",
+      "choices": [
+        {
+          "label": "Auto-detect (recommended)",
+          "set": {
+            "controller_layout": "auto"
+          }
+        },
+        {
+          "label": "Xbox / PlayStation",
+          "set": {
+            "controller_layout": "standard"
+          }
+        },
+        {
+          "label": "Nintendo (A/B swap)",
+          "set": {
+            "controller_layout": "nintendo"
+          }
+        },
+        {
+          "label": "Keyboard (WASD)",
+          "set": {
+            "controller_layout": "keyboard"
+          }
+        }
+      ],
+      "defaults": {
+        "controller_layout": "auto"
+      }
     },
     {
       "id": "window",

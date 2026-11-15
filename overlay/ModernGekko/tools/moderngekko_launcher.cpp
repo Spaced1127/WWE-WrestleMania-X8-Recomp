@@ -73,7 +73,7 @@ constexpr std::string_view CONTROLLER_PROFILE_NAME = "WiimoteNew.ini";
 #endif
 
 #ifndef WWE_RECOMP_VERSION
-#define WWE_RECOMP_VERSION "0.1.0"
+#define WWE_RECOMP_VERSION "0.1.1"
 #endif
 
 struct LauncherTheme

@@ -1,5 +1,5 @@
 param(
-  [string]$Version = '0.1.0',
+  [string]$Version = '0.1.1',
   [string]$Module = '',
   [switch]$Force
 )
@@ -63,7 +63,12 @@ if (Test-Path $resources) {
 Copy-Item (Join-Path $release 'README.txt') $out
 Copy-Item (Join-Path $release 'PLAYERS.md') $out
 Copy-Item (Join-Path $release 'recomplauncher.json') $out
-Copy-Item (Join-Path $release 'release-notes-v0.1.0.md') $out
+$notes = Join-Path $release ("release-notes-v$Version.md")
+if (Test-Path $notes) {
+  Copy-Item $notes $out
+} else {
+  Write-Warning "Release notes missing: $notes"
+}
 Copy-Item (Join-Path $release 'THIRD_PARTY.md') $out
 
 $defaults = Join-Path $root 'defaults'

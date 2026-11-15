@@ -14,6 +14,7 @@ Copy-Item overlay\ModernGekko\* lib\ModernGekko-Template\lib\ModernGekko\ -Recur
 | Overlay file | Purpose |
 |---|---|
 | `tools/moderngekko_launcher.cpp` | WMX8 theme, parity pages, diagnostics, background loading, controller layout UI |
+| `tools/moderngekko_run.cpp` | RecompLauncher controller auto-provisioning, layout selection and keyboard fallback |
 | `tools/frontend_config.cpp` / `.hpp` | `controller_layout` config, SDL pad detection, Nintendo A/B swap, keyboard profile |
 | `src/runtime/game.cpp` | `InspectGame` no longer hashes the extracted `files/` tree |
 | `vendor/dolphin/module-template/CMakeLists.txt` | `-march=x86-64-v3`, loop budget 4096, call depth 128 |

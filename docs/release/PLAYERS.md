@@ -80,6 +80,9 @@ portable between builds of the recompiled module.
 
 ## Known gaps
 
-- Only the 1v1 Exhibition path is tested end to end.
-- Audio is enabled but was not verified on every output device.
-- No texture, music or gameplay mods are included in v0.1.0.
+- 1v1 and Fatal 4 Way are tested end to end. Other match types, every
+  entrance and a full match finish are not exhaustively tested.
+- Audio is enabled and verified with Cubeb; not every output device was
+  listened to.
+- Netplay is not part of the tested v0.1.1 scope.
+- No texture, music or gameplay mods are included in v0.1.1.

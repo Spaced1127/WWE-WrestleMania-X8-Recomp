@@ -89,7 +89,7 @@ so no cold DolRecomp/ModernGekko build is needed:
 | 1v1 performance | 59.91 fps / 0.995 with Cubeb |
 | PGO | collected, not needed (idle-loop dominated) |
 | Branded launcher / runner | done, parity patched |
-| v0.1.0 release zip | done, no game data |
+| v0.1.1 release zip | done, no game data |
 
 ## Module
 
@@ -268,7 +268,7 @@ D-Pad/Up      = `Pad N` & `Shoulder L`
 Menus: D-pad or left stick. Match: D-pad moves, L1 + D-pad taunts. A standalone
 copy is `defaults/GCPadNew.dualsense-menu.ini`.
 
-## Launcher and v0.1.0 release
+## Launcher and v0.1.1 release
 
 The launcher and runner are built from the local copy at
 `lib\ModernGekko-Template\lib\ModernGekko` (the SpongeBob launcher source plus
@@ -324,9 +324,9 @@ Two runtime fixes were needed for this title:
 Release artifact:
 
 ```
-dist\WrestleManiaX8Recomp-v0.1.0-Windows-x64.zip   19,566,392 bytes
-SHA-256 21EBA6A10B3D84D0E05AC31B16AE1D1C39D8BA89767102AFA1C696E20A6EB1AD
-Release https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.0
+dist\WrestleManiaX8Recomp-v0.1.1-Windows-x64.zip   19,570,397 bytes
+SHA-256 85887C822B074BDF73B2A9A0C9A28FCBDEEF75E6CD3590DC1205515A8C272E8B
+Release https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.1
 ```
 
 Contents: launcher, runner, `gGW3E78_recomp.dll`, pruned `Sys/` (GC,
@@ -340,7 +340,7 @@ Note: the extraction still creates the disc's five non-ASCII "copy" entries
 (one directory tree). They are not referenced by normal gameplay and the
 loader ignores them; they are not shipped.
 
-Release verification (2026-11-13):
+Release verification (2026-11-14):
 
 - [x] `WrestleManiaX8Recomp.exe` and `WrestleManiaX8RecompRunner.exe` build
       with the WMX8 icon resources.
@@ -354,10 +354,15 @@ Release verification (2026-11-13):
 - [x] `recomplauncher.json` validates against the SDK schema (0 errors).
 - [x] Icon extraction from both exes shows the SteamGridDB Austin icon.
 - [x] The zip's launcher loads `resources/background.png` and the WMX8 theme.
-- [x] The zip's runner holds **60.00 fps / 1.006** in the Fatal 4 Way with
-      Cubeb audio, high priority and affinity `0xFF` (40 s warm-up).
-- [x] The controller build holds **59.92 fps / 1.010** in the same state with
-      Null audio, minimized, high priority and affinity `0xFF`.
+- [x] The v0.1.1 zip's runner holds **59.95 fps / 1.006** in the Fatal 4 Way
+      with Cubeb audio, minimized, high priority and affinity `0xFF`.
+- [x] RecompLauncher scenario: a fresh user dir with no custom launcher, the
+      runner auto-detects the pad and writes `Config\GCPadNew.ini` itself.
+- [x] `controller_layout=nintendo` in `config.ini` regenerates the profile
+      with A/B and X/Y swapped; Auto preserves an existing custom profile.
+- [x] The keyboard layout writes `DInput/0/Keyboard Mouse` with
+      Enter/Backspace/WASD bindings, and `--controller-layout` works for
+      scripted launches.
 - [x] Controller layout tests pass for DualSense, DualShock 4, Xbox 360,
       Steam Deck, 8BitDo, Switch Pro, Joy-Con, Wii U Pro and keyboard,
       including Nintendo A/B and X/Y swapping and keyboard bindings.
@@ -365,7 +370,7 @@ Release verification (2026-11-13):
       DualShock 4/3, Xbox, Xbox 360, Steam Deck, 8BitDo, Switch Pro, Joy-Con,
       Wii U Pro, GameCube adapter, generic and keyboard.
 - [x] The zip's runner and module are byte-identical to the release folder
-      (`CC563E8D…`, `B4264EEE…`).
+      (`CE4C00B4…`, `B4264EEE…`).
 - [x] Theme audit: no other-title branding or disc IDs in shipped
       launcher/config/docs files; Dolphin's generic `Sys/Shaders` collection is
       unmodified.
