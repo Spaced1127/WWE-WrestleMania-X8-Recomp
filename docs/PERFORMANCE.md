@@ -44,6 +44,7 @@ Triple H in the ring with the referee.
 | Static optimized + idle skip + Cubeb audio | **59.93** | **1.004** | final shipped configuration |
 | Release zip runner, Cubeb, high priority + affinity `0xFF` | 60.00 | 1.006 | 40 s warm-up, 20 s measure |
 | Release v0.1.1 runner, Cubeb, minimized | 59.95 | 1.006 | controller auto-provisioning build |
+| Release v0.1.2 runner, hidden desktop, Null audio | 59.86 | 1.001 | 8BitDo mapping build |
 | Release zip runner, controller build, Null audio, minimized | 59.92 | 1.010 | high priority + affinity `0xFF` |
 | 1v1, same configuration | 59.91 | 0.995 | full speed |
 | Static optimized + L3 affinity | 57.62 | 0.9534 | affinity hurts on this 7800X3D |

@@ -79,15 +79,21 @@ ControllerProfileLayout(const std::string &text) {
   return ControllerLayout::Standard;
 }
 
-std::string ChooseControllerDevice(std::string_view preferred) {
+struct ControllerDevice {
+  std::string device;
+  std::string guid;
+  std::string mapping;
+};
+
+ControllerDevice ChooseControllerDevice(std::string_view preferred) {
   constexpr std::string_view keyboard = "DInput/0/Keyboard Mouse";
   if (preferred == keyboard)
-    return std::string(keyboard);
+    return {std::string(keyboard), {}, {}};
 
   int count = 0;
   SDL_JoystickID *ids = SDL_GetJoysticks(&count);
-  std::string first;
-  std::string match;
+  ControllerDevice first;
+  ControllerDevice match;
   if (ids) {
     for (int i = 0; i < count; ++i) {
       if (!SDL_IsGamepad(ids[i]))
@@ -95,15 +101,23 @@ std::string ChooseControllerDevice(std::string_view preferred) {
       const char *name = SDL_GetGamepadNameForID(ids[i]);
       if (!name || !*name)
         continue;
-      const std::string device = "SDL/0/" + std::string(name);
-      if (first.empty())
-        first = device;
-      if (device == preferred)
-        match = device;
+      ControllerDevice candidate;
+      candidate.device = "SDL/0/" + std::string(name);
+      const SDL_GUID guid = SDL_GetGamepadGUIDForID(ids[i]);
+      char guid_text[33]{};
+      SDL_GUIDToString(guid, guid_text, static_cast<int>(sizeof(guid_text)));
+      candidate.guid = guid_text;
+      char *mapping = SDL_GetGamepadMappingForID(ids[i]);
+      candidate.mapping = mapping ? mapping : "";
+      SDL_free(mapping);
+      if (first.device.empty())
+        first = candidate;
+      if (candidate.device == preferred)
+        match = candidate;
     }
   }
   SDL_free(ids);
-  return !match.empty() ? match : first;
+  return !match.device.empty() ? match : first;
 }
 
 void EnsureDefaultControllerConfig(
@@ -111,6 +125,7 @@ void EnsureDefaultControllerConfig(
     moderngekko::frontend::ControllerLayout requested_layout,
     std::string_view preferred_device) {
   using moderngekko::frontend::ControllerLayout;
+  using moderngekko::frontend::ControllerMapping;
 
   if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) {
     std::cerr << "controller: SDL init failed: " << SDL_GetError() << '\n';
@@ -118,17 +133,23 @@ void EnsureDefaultControllerConfig(
   }
 
   constexpr std::string_view keyboard_device = "DInput/0/Keyboard Mouse";
-  std::string device = ChooseControllerDevice(preferred_device);
+  ControllerDevice chosen = ChooseControllerDevice(preferred_device);
+  std::string device = chosen.device;
   if (requested_layout == ControllerLayout::Keyboard)
     device = std::string(keyboard_device);
   if (device.empty())
     device = std::string(keyboard_device);
 
-  ControllerLayout layout = requested_layout;
-  if (device == keyboard_device)
-    layout = ControllerLayout::Keyboard;
-  else if (layout == ControllerLayout::Auto)
-    layout = moderngekko::frontend::DetectControllerLayout(device);
+  ControllerMapping mapping =
+      moderngekko::frontend::DetectControllerMapping(device, chosen.mapping,
+                                                     chosen.guid);
+  if (device == keyboard_device) {
+    mapping = {ControllerLayout::Keyboard, false};
+  } else if (requested_layout != ControllerLayout::Auto) {
+    mapping.layout = requested_layout;
+  }
+  if (mapping.layout == ControllerLayout::Keyboard)
+    mapping.swap_dpad_lr = false;
 
   const std::filesystem::path profile_path =
       user_directory / "Config" / "GCPadNew.ini";
@@ -136,15 +157,28 @@ void EnsureDefaultControllerConfig(
   const bool exists = !existing.empty();
   const std::string existing_device = ControllerProfileDevice(existing);
   const ControllerLayout existing_layout = ControllerProfileLayout(existing);
+  const bool existing_dpad_swapped = moderngekko::frontend::ControllerProfileDpadSwapped(existing);
 
   bool regenerate = !exists || existing_device != device;
   if (!regenerate && requested_layout != ControllerLayout::Auto)
-    regenerate = existing_layout != layout;
+    regenerate = existing_layout != mapping.layout;
+  if (!regenerate && requested_layout == ControllerLayout::Auto &&
+      existing_layout != mapping.layout &&
+      moderngekko::frontend::ControllerProfileIsDefault(existing, existing_layout))
+    regenerate = true;
+  if (!regenerate && existing_dpad_swapped != mapping.swap_dpad_lr &&
+      moderngekko::frontend::ControllerProfileIsDefault(existing, existing_layout))
+    regenerate = true;
+
+  std::cerr << "controller: name=\"" << device << "\" guid=" << chosen.guid
+            << " layout="
+            << moderngekko::frontend::ControllerLayoutName(mapping.layout)
+            << " dpad=" << (mapping.swap_dpad_lr ? "swapped" : "normal") << '\n';
 
   if (regenerate) {
     std::string message;
     if (moderngekko::frontend::GenerateControllerConfig(
-            user_directory, device, layout, &message))
+            user_directory, device, mapping, &message))
       std::cerr << "controller configuration: " << message << '\n';
     else
       std::cerr << "controller configuration failed: " << message << '\n';

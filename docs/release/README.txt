@@ -1,5 +1,5 @@
 WWE WrestleMania X8
-Standalone PC port (static recompilation) - Windows x64 - v0.1.1
+Standalone PC port (static recompilation) - Windows x64 - v0.1.2
 ================================================================
 
 This package contains NO game data. There is no disc image, no ROM, no
@@ -16,7 +16,9 @@ either as:
   * a .iso image (1.36 GiB, clean 1:1 dump), or
   * a .rvz image (Dolphin compressed format).
 
-Both are imported by this app. Other regions and other games are rejected.
+Both are imported directly by this app. RVZ is read natively through
+Dolphin's DiscIO; there is no RVZ-to-ISO conversion step. Other regions and
+other games are rejected.
 
 
 QUICK START
@@ -193,7 +195,7 @@ D-pad does nothing in menus
     D-pad profile, or move the left stick.
 
 
-KNOWN LIMITATIONS (v0.1.1)
+KNOWN LIMITATIONS (v0.1.2)
 --------------------------
   * 1v1 and Fatal 4 Way are tested end to end. Battle Royal, every entrance
     and a full match to a finish are not exhaustively tested.

@@ -6,7 +6,10 @@ executable/module is not a GameCube DOL, so "bit-identical rebuilt DOL" can
 only be asserted for the preserved input, not for the native artifact.
 
 Usage:
-    python tools/verify_dol.py <game.iso> <main.dol> [more.dol ...]
+    python tools/verify_dol.py <game.iso|game-folder|main.dol> <main.dol> [more.dol ...]
+
+The reference may be a raw ISO, an extracted game folder (for RVZ users who
+ran tools/extract_game.ps1), or a standalone DOL.
 """
 from __future__ import annotations
 
@@ -55,13 +58,21 @@ def extract_dol(iso: Path) -> bytes:
         return f.read(max(ends))
 
 
+def reference_dol(source: Path) -> bytes:
+    if source.is_dir():
+        return (source / "sys" / "main.dol").read_bytes()
+    if source.suffix.lower() == ".dol":
+        return source.read_bytes()
+    return extract_dol(source)
+
+
 def main(argv: list[str]) -> int:
     if len(argv) < 3:
         print(__doc__.strip())
         return 2
-    iso = Path(argv[1])
-    reference = extract_dol(iso)
-    print(f"reference: {iso} -> DOL {len(reference):,} bytes")
+    source = Path(argv[1])
+    reference = reference_dol(source)
+    print(f"reference: {source} -> DOL {len(reference):,} bytes")
     print(f"  SHA-256 {sha256(reference)}")
     print(f"  SHA-1   {sha1(reference)}")
     ok = True

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Minimal RVZ (Dolphin compressed disc image) extractor.
 
+Optional fallback only. The launcher and tools/extract_game.ps1 read RVZ
+natively through Dolphin DiscIO; use this only for ISO-only diagnostics that
+cannot take an extracted game folder.
+
 Implements the WIA-derived RVZ container documented in Dolphin's
 docs/WiaAndRvz.md and the GameCube raw-data path used by WIABlob.cpp.
 Only the compression modes needed for this project are implemented:

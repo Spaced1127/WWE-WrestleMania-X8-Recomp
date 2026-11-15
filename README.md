@@ -13,7 +13,7 @@ git-ignored.
 
 | Step | State |
 |---|---|
-| RVZ → ISO | done |
+| RVZ / ISO input | native, byte-identical extraction |
 | Disc / DOL / FST inventory | done |
 | DOL hash verified | done |
 | Static C module (MSVC) | done, boots |
@@ -23,21 +23,21 @@ git-ignored.
 | Performance | **59.94 fps / speed 1.00 in-match (Clang `-O3`)** |
 | PGO | optional headroom, not started |
 | Branded launcher / runner | done |
-| v0.1.1 release zip | done, no game data |
+| v0.1.2 release zip | done, no game data |
 
 See [`docs/STATE.md`](docs/STATE.md) for the full inventory, evidence paths,
 save-state checkpoints and open issues.
 
-## v0.1.1 release
+## v0.1.2 release
 
 ```powershell
 tools\build_launcher.bat        # WrestleManiaX8Recomp.exe + ...Runner.exe
 tools\finalize_release.ps1 -Module <gGW3E78_recomp.dll>   # folder + zip + hash
 ```
 
-Artifact: `dist\WrestleManiaX8Recomp-v0.1.1-Windows-x64.zip`
-SHA-256: `85887C822B074BDF73B2A9A0C9A28FCBDEEF75E6CD3590DC1205515A8C272E8B`
-GitHub release: https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.1
+Artifact: `dist\WrestleManiaX8Recomp-v0.1.2-Windows-x64.zip`
+SHA-256: `E22F48D2808471CAB4ED0E22C85DAF31D187264BCEA61A90FE87ADCF1D0064FB`
+GitHub release: https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.2
 
 The launcher and runner are WMX8-branded, the static Clang module is the
 default core, and the generated controller profile uses the D-pad for menu
@@ -117,20 +117,18 @@ tools\play.ps1 -State work\states\match.sav      # jump into a match
 Xbox, Xbox 360, Steam Deck, 8BitDo, Switch Pro, Joy-Con, Wii U Pro, GameCube
 adapter, generic and keyboard. The launcher's CONTROLLER page detects any SDL
 pad, writes the exact device name, and has an Auto / Xbox-PlayStation /
-Nintendo / Keyboard layout selector. The D-pad is **taunt** in WMX8; menus use
+Nintendo / Keyboard layout selector. DualSense Edge and Xbox Elite Series 1/2
+are GUID-detected as standard PlayStation/Xbox pads; their paddles, Fn and
+touchpad buttons are intentionally ignored. The D-pad is **taunt** in WMX8; menus use
 the left stick and the right stick switches targets. Only the `Device =` line
 is controller-specific; see `defaults/README.md`.
 
 ## Quick start
 
 ```powershell
-# Decompress your own RVZ
-python tools\rvz_extract.py "WWE WrestleMania X8 (USA).rvz" work\disc\game.iso
-
-# Verify and extract
-python tools\gcdisc.py info work\disc\game.iso
-& <moderngekko>\dolrecomp.exe extract work\disc\game.iso work\game
-python tools\verify_dol.py work\disc\game.iso work\game\sys\main.dol
+# Extract directly from an ISO or RVZ with the launcher (no conversion)
+tools\extract_game.ps1 -Image "WWE WrestleMania X8 (USA).rvz" -Force
+# or: tools\extract_game.ps1 -Image "WWE WrestleMania X8 (USA).iso" -Force
 
 # Build the module (MSVC first, then Clang)
 & <moderngekko>\moderngekko-port.exe build work\game --backend c --toolchain msvc --output build\modules
@@ -141,6 +139,16 @@ python tools\verify_dol.py work\disc\game.iso work\game\sys\main.dol
   --user-dir work\user-3 --graphics Vulkan --audio Null `
   --automation-dir work\auto --load-state work\states\match.sav
 ```
+
+`.iso`, `.rvz` and `.wbfs` are first-class launcher inputs. The file picker
+lists all three, and `extract_game.ps1` drives the launcher's headless
+`--extract` path, which reads RVZ through Dolphin DiscIO and writes the same
+`sys/` + `files/` tree as an ISO. `tools\rvz_extract.py` is an optional
+fallback for ISO-only diagnostics, not part of this flow.
+
+`tools\verify_dol.py`, `tools\check_fst.py` and `tools\gcdisc.py` accept the
+extracted `work\game` folder directly, so RVZ users do not need a raw ISO for
+the diagnostics either.
 
 Automation commands go in `work/auto/commands/*.txt`:
 

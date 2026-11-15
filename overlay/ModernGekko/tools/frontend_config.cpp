@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <sstream>
 #include <string_view>
 
@@ -75,8 +76,77 @@ std::string_view ControllerSectionPrefix() {
 #endif
 }
 
-void WriteGameCubeMapping(std::ostream &output, ControllerLayout layout) {
-  const bool nintendo = layout == ControllerLayout::Nintendo;
+int HexNibble(char c) {
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  if (c >= 'a' && c <= 'f')
+    return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F')
+    return c - 'A' + 10;
+  return -1;
+}
+
+std::optional<std::uint16_t> GuidWord(std::string_view guid,
+                                      std::size_t offset) {
+  if (guid.size() < offset + 4)
+    return std::nullopt;
+  const int low = HexNibble(guid[offset]);
+  const int low2 = HexNibble(guid[offset + 1]);
+  const int high = HexNibble(guid[offset + 2]);
+  const int high2 = HexNibble(guid[offset + 3]);
+  if (low < 0 || low2 < 0 || high < 0 || high2 < 0)
+    return std::nullopt;
+  return static_cast<std::uint16_t>((low << 4) | low2 |
+                                    (((high << 4) | high2) << 8));
+}
+
+enum class ControllerGuidFamily { Unknown, DualSenseEdge, XboxElite };
+
+ControllerGuidFamily ClassifyControllerGuid(std::string_view guid) {
+  const std::optional<std::uint16_t> vendor = GuidWord(guid, 8);
+  const std::optional<std::uint16_t> product = GuidWord(guid, 16);
+  if (!vendor || !product)
+    return ControllerGuidFamily::Unknown;
+  if (*vendor == 0x054c && *product == 0x0df2)
+    return ControllerGuidFamily::DualSenseEdge;
+  if (*vendor == 0x045e &&
+      (*product == 0x02e3 || *product == 0x0b00 || *product == 0x0b05))
+    return ControllerGuidFamily::XboxElite;
+  return ControllerGuidFamily::Unknown;
+}
+
+std::string_view MappingValue(std::string_view mapping, std::string_view key) {
+  std::string needle(key);
+  needle += ':';
+  std::size_t position = 0;
+  while ((position = mapping.find(needle, position)) != std::string_view::npos) {
+    if (position == 0 || mapping[position - 1] == ',') {
+      const std::size_t begin = position + needle.size();
+      const std::size_t end = mapping.find(',', begin);
+      return mapping.substr(begin, end == std::string_view::npos
+                                      ? std::string_view::npos
+                                      : end - begin);
+    }
+    position += needle.size();
+  }
+  return {};
+}
+
+std::optional<int> ButtonIndex(std::string_view value) {
+  if (value.size() < 2 || value.front() != 'b')
+    return std::nullopt;
+  int index = 0;
+  const auto parsed =
+      std::from_chars(value.data() + 1, value.data() + value.size(), index);
+  if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size())
+    return std::nullopt;
+  return index;
+}
+
+void WriteGameCubeMapping(std::ostream &output, ControllerMapping mapping) {
+  const bool nintendo = mapping.layout == ControllerLayout::Nintendo;
+  const char *dpad_left = mapping.swap_dpad_lr ? "`Pad E`" : "`Pad W`";
+  const char *dpad_right = mapping.swap_dpad_lr ? "`Pad W`" : "`Pad E`";
   output << "Buttons/A = " << (nintendo ? "`Button B`" : "`Button A`") << '\n'
          << "Buttons/B = " << (nintendo ? "`Button A`" : "`Button B`") << '\n'
          << "Buttons/X = " << (nintendo ? "`Button Y`" : "`Button X`") << '\n'
@@ -98,10 +168,10 @@ void WriteGameCubeMapping(std::ostream &output, ControllerLayout layout) {
             "Triggers/L-Analog = `Trigger L`\n"
             "Triggers/R-Analog = `Trigger R`\n"
             "D-Pad/Up = `Pad N` & `Shoulder L`\n"
-            "D-Pad/Down = `Pad S` & `Shoulder L`\n"
-            "D-Pad/Left = `Pad W` & `Shoulder L`\n"
-            "D-Pad/Right = `Pad E` & `Shoulder L`\n"
-            "Rumble/Motor = `Motor L` | `Motor R`\n";
+            "D-Pad/Down = `Pad S` & `Shoulder L`\n";
+  output << "D-Pad/Left = " << dpad_left << " & `Shoulder L`\n"
+         << "D-Pad/Right = " << dpad_right << " & `Shoulder L`\n"
+         << "Rumble/Motor = `Motor L` | `Motor R`\n";
 }
 
 void WriteKeyboardMapping(std::ostream &output) {
@@ -164,6 +234,88 @@ ControllerLayout DetectControllerLayout(std::string_view device) {
   // Xbox, PlayStation, Steam Deck, 8BitDo in XInput mode, the GameCube
   // adapter and generic SDL pads all use the standard positional layout.
   return ControllerLayout::Standard;
+}
+
+ControllerMapping DetectControllerMapping(std::string_view device,
+                                          std::string_view sdl_mapping,
+                                          std::string_view sdl_guid) {
+  ControllerMapping result;
+  const std::string lower = Lower(std::string(device));
+  if (lower.find("keyboard") != std::string::npos) {
+    result.layout = ControllerLayout::Keyboard;
+    return result;
+  }
+
+  const ControllerGuidFamily family = ClassifyControllerGuid(sdl_guid);
+  if (family == ControllerGuidFamily::DualSenseEdge ||
+      family == ControllerGuidFamily::XboxElite) {
+    // Edge/Elite are standard-position pads. Their extra paddles/Fn buttons
+    // are intentionally not bound; the standard face buttons, sticks, D-pad
+    // and triggers behave exactly like the base DualSense/Xbox pads.
+    result.layout = ControllerLayout::Standard;
+  } else if (lower.find("switch") != std::string::npos ||
+             lower.find("joy-con") != std::string::npos ||
+             lower.find("joycon") != std::string::npos ||
+             lower.find("nintendo") != std::string::npos ||
+             lower.find("pro controller") != std::string::npos ||
+             lower.find("wii u") != std::string::npos) {
+    // Keep the established name rule for Nintendo first-party pads. Their SDL
+    // DB entries are not consistent about a/b ordering across firmware, but the
+    // project has always treated the printed labels as the reference.
+    result.layout = ControllerLayout::Nintendo;
+  } else {
+    // 8BitDo is the important case: Pro 2/SN30/SF30/N30 and the Switch-mode
+    // report use a:b1,b:b0 (or a:b3,b:b2), while the Ultimate and 64 families
+    // use a:b0,b:b1. Read the live SDL mapping rather than guessing from the
+    // product name, so XInput and Switch modes are both correct.
+    const std::optional<int> a = ButtonIndex(MappingValue(sdl_mapping, "a"));
+    const std::optional<int> b = ButtonIndex(MappingValue(sdl_mapping, "b"));
+    if (a && b && *a != *b)
+      result.layout = *a > *b ? ControllerLayout::Nintendo
+                              : ControllerLayout::Standard;
+    else
+      result.layout = DetectControllerLayout(device);
+  }
+
+  // Some 8BitDo reports expose the D-pad in the opposite left/right order.
+  // Correct it from the mapping itself; the standard 8BitDo entries in the
+  // shipped SDL DB are already left/right correct and stay unchanged.
+  const std::string_view left = MappingValue(sdl_mapping, "dpleft");
+  const std::string_view right = MappingValue(sdl_mapping, "dpright");
+  if (!left.empty() && !right.empty()) {
+    if (left.starts_with("h") && right.starts_with("h")) {
+      result.swap_dpad_lr = left == "h0.2" && right == "h0.8";
+    } else {
+      const std::optional<int> left_button = ButtonIndex(left);
+      const std::optional<int> right_button = ButtonIndex(right);
+      if (left_button && right_button)
+        result.swap_dpad_lr = *left_button > *right_button;
+      else if (left.starts_with("+") && right.starts_with("-"))
+        result.swap_dpad_lr = true;
+    }
+  }
+  return result;
+}
+
+bool ControllerProfileDpadSwapped(std::string_view text) {
+  return text.find("D-Pad/Left = `Pad E`") != std::string_view::npos &&
+         text.find("D-Pad/Right = `Pad W`") != std::string_view::npos;
+}
+
+bool ControllerProfileIsDefault(std::string_view text,
+                                ControllerLayout layout) {
+  if (layout == ControllerLayout::Keyboard)
+    return text.find("Buttons/A = `RETURN`") != std::string_view::npos &&
+           text.find("Buttons/B = `BACKSPACE`") != std::string_view::npos;
+  const bool nintendo = layout == ControllerLayout::Nintendo;
+  return text.find(nintendo ? "Buttons/A = `Button B`" : "Buttons/A = `Button A`") !=
+             std::string_view::npos &&
+         text.find(nintendo ? "Buttons/B = `Button A`" : "Buttons/B = `Button B`") !=
+             std::string_view::npos &&
+         text.find(nintendo ? "Buttons/X = `Button Y`" : "Buttons/X = `Button X`") !=
+             std::string_view::npos &&
+         text.find(nintendo ? "Buttons/Y = `Button X`" : "Buttons/Y = `Button Y`") !=
+             std::string_view::npos;
 }
 
 const std::vector<ResolutionOption> &SupportedResolutions() {
@@ -542,7 +694,7 @@ bool ControllerConfigExists(const fs::path &user_directory) {
 
 bool GenerateControllerConfig(const fs::path &user_directory,
                               std::span<const std::string> controllers,
-                              ControllerLayout layout, std::string *message) {
+                              ControllerMapping mapping, std::string *message) {
   if (controllers.empty() || controllers.size() > 4) {
     if (message)
       *message = "select between one and four connected SDL gamepads";
@@ -578,16 +730,17 @@ bool GenerateControllerConfig(const fs::path &user_directory,
       continue;
     output << "Device = " << controllers[i] << '\n';
     const ControllerLayout detected = DetectControllerLayout(controllers[i]);
-    const ControllerLayout resolved =
-        detected == ControllerLayout::Keyboard
-            ? ControllerLayout::Keyboard
-            : (layout == ControllerLayout::Auto ? detected : layout);
-    if (resolved == ControllerLayout::Keyboard)
+    ControllerMapping resolved = mapping;
+    if (detected == ControllerLayout::Keyboard)
+      resolved.layout = ControllerLayout::Keyboard;
+    else if (resolved.layout == ControllerLayout::Auto)
+      resolved.layout = detected;
+    if (resolved.layout == ControllerLayout::Keyboard)
       WriteKeyboardMapping(output);
     else
       WriteGameCubeMapping(output, resolved);
 #else
-    (void)layout;
+    (void)mapping;
     output << "[Wiimote" << i + 1 << "]\n";
     if (i >= controllers.size())
       continue;
@@ -656,8 +809,10 @@ bool GenerateControllerConfig(const fs::path &user_directory,
 #endif
                (controllers.size() == 1 ? " mapped" : "s mapped");
 #ifdef MODERNGEKKO_GAMECUBE_CONTROLLERS
-    if (layout != ControllerLayout::Auto)
-      *message += std::string(" (") + ControllerLayoutName(layout) + " layout)";
+    if (mapping.layout != ControllerLayout::Auto)
+      *message += std::string(" (") + ControllerLayoutName(mapping.layout) + " layout)";
+    if (mapping.swap_dpad_lr)
+      *message += " (d-pad left/right corrected)";
 #endif
   }
   return true;
@@ -667,22 +822,38 @@ bool GenerateControllerConfig(const fs::path &user_directory,
                               std::span<const std::string> controllers,
                               std::string *message) {
   return GenerateControllerConfig(user_directory, controllers,
-                                  ControllerLayout::Auto, message);
+                                  ControllerMapping{ControllerLayout::Auto, false},
+                                  message);
+}
+
+bool GenerateControllerConfig(const fs::path &user_directory,
+                              std::span<const std::string> controllers,
+                              ControllerLayout layout, std::string *message) {
+  return GenerateControllerConfig(user_directory, controllers,
+                                  ControllerMapping{layout, false}, message);
+}
+
+bool GenerateControllerConfig(const fs::path &user_directory,
+                              std::string_view controller,
+                              ControllerMapping mapping, std::string *message) {
+  const std::string value(controller);
+  return GenerateControllerConfig(
+      user_directory, std::span<const std::string>(&value, 1), mapping, message);
 }
 
 bool GenerateControllerConfig(const fs::path &user_directory,
                               std::string_view controller,
                               ControllerLayout layout, std::string *message) {
-  const std::string value(controller);
-  return GenerateControllerConfig(
-      user_directory, std::span<const std::string>(&value, 1), layout, message);
+  return GenerateControllerConfig(user_directory, controller,
+                                  ControllerMapping{layout, false}, message);
 }
 
 bool GenerateControllerConfig(const fs::path &user_directory,
                               std::string_view controller,
                               std::string *message) {
   return GenerateControllerConfig(user_directory, controller,
-                                  ControllerLayout::Auto, message);
+                                  ControllerMapping{ControllerLayout::Auto, false},
+                                  message);
 }
 
 bool EnsureControllerConfig(const fs::path &user_directory,

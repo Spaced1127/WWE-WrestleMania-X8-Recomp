@@ -1,5 +1,10 @@
 # Players
 
+## Disc image
+
+The launcher accepts `.iso`, `.rvz` and `.wbfs` directly. `.rvz` is read
+natively through Dolphin's DiscIO; there is no RVZ-to-ISO conversion step.
+
 ## Controls
 
 | Action | Keyboard | GameCube pad | Xbox pad | DualSense | Switch Pro |
@@ -33,7 +38,11 @@ exact device name, so you do not need a pre-made profile. The layout presets
 cover:
 
 - Xbox Series, Xbox One, Xbox 360 and generic XInput pads
+- Xbox Elite Series 1 and 2 (Microsoft `045E:02E3`, `045E:0B00`,
+  `045E:0B05`) — standard Xbox layout; P1-P4 paddles are ignored
 - DualSense, DualShock 4 and DualShock 3
+- DualSense Edge (Sony `054C:0DF2`) — standard DualSense layout; paddles,
+  Fn and touchpad are ignored
 - Switch Pro Controller, Joy-Con, Switch Online pads and Wii U Pro Controller
 - Steam Deck
 - 8BitDo pads in XInput mode or Switch mode
@@ -53,6 +62,10 @@ On the **CONTROLLER** page, select the active controller and choose a
 
 Press **Use this controller** to rewrite the profile with the selected layout.
 Existing custom profiles are left alone until you do.
+
+The runner logs one line at startup:
+`controller: name="…" guid=… layout=… dpad=…`. If a pad is still wrong, send
+that line; it identifies the exact model and mode.
 
 ## Save data
 
@@ -84,5 +97,5 @@ portable between builds of the recompiled module.
   entrance and a full match finish are not exhaustively tested.
 - Audio is enabled and verified with Cubeb; not every output device was
   listened to.
-- Netplay is not part of the tested v0.1.1 scope.
-- No texture, music or gameplay mods are included in v0.1.1.
+- Netplay is not part of the tested v0.1.2 scope.
+- No texture, music or gameplay mods are included in v0.1.2.

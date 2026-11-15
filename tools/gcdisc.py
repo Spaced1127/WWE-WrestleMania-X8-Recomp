@@ -2,17 +2,22 @@
 """GameCube disc / DOL / FST inspection and extraction.
 
 Usage:
-    python tools/gcdisc.py info    <game.iso>
-    python tools/gcdisc.py list    <game.iso> [path-filter]
-    python tools/gcdisc.py extract <game.iso> <out-dir> [path-filter]
-    python tools/gcdisc.py dol     <game.iso> <out-dir>
+    python tools/gcdisc.py info    <game.iso|game-folder>
+    python tools/gcdisc.py list    <game.iso|game-folder> [path-filter]
+    python tools/gcdisc.py extract <game.iso|game-folder> <out-dir> [path-filter]
+    python tools/gcdisc.py dol     <game.iso|game-folder> <out-dir>
 
 The DOL is written section-by-section with a JSON manifest so it can be
 loaded into a disassembler at the original virtual addresses.
+
+A game folder is the `work/game` tree produced by tools/extract_game.ps1 from
+either an ISO or an RVZ. Raw `.rvz` containers should be extracted with that
+launcher path first; this script does not parse the RVZ container itself.
 """
 from __future__ import annotations
 
 import json
+import shutil
 import struct
 import sys
 from dataclasses import dataclass, asdict
@@ -84,8 +89,11 @@ def parse_dol(data: bytes, file_offset: int = 0) -> Dol:
     return Dol(sections, bss_addr, bss_size, entry)
 
 
-def read_dol(iso: Path) -> tuple[Dol, bytes]:
-    with iso.open("rb") as f:
+def read_dol(source: Path) -> tuple[Dol, bytes]:
+    if source.is_dir():
+        raw = (source / "sys" / "main.dol").read_bytes()
+        return parse_dol(raw), raw
+    with source.open("rb") as f:
         f.seek(0x420)
         dol_offset = struct.unpack(">I", f.read(4))[0]
         f.seek(dol_offset)
@@ -106,13 +114,8 @@ def read_dol(iso: Path) -> tuple[Dol, bytes]:
         return dol, bytes(raw)
 
 
-def parse_fst(iso: Path) -> tuple[list[FstEntry], int, int]:
-    with iso.open("rb") as f:
-        f.seek(0x424)
-        fst_offset = struct.unpack(">I", f.read(4))[0]
-        fst_size = struct.unpack(">I", f.read(4))[0]
-        f.seek(fst_offset)
-        fst = f.read(fst_size)
+def _parse_fst_blob(fst: bytes, fst_offset: int = 0,
+                    fst_size: int = 0) -> tuple[list[FstEntry], int, int]:
     if len(fst) < 12:
         raise ValueError("FST too small")
 
@@ -176,6 +179,23 @@ def parse_fst(iso: Path) -> tuple[list[FstEntry], int, int]:
     return root.children or [], fst_offset, fst_size
 
 
+def parse_fst_bytes(fst: bytes) -> tuple[list[FstEntry], int, int]:
+    return _parse_fst_blob(fst, 0, len(fst))
+
+
+def parse_fst(source: Path) -> tuple[list[FstEntry], int, int]:
+    if source.is_dir():
+        fst = (source / "sys" / "fst.bin").read_bytes()
+        return _parse_fst_blob(fst, 0, len(fst))
+    with source.open("rb") as f:
+        f.seek(0x424)
+        fst_offset = struct.unpack(">I", f.read(4))[0]
+        fst_size = struct.unpack(">I", f.read(4))[0]
+        f.seek(fst_offset)
+        fst = f.read(fst_size)
+    return _parse_fst_blob(fst, fst_offset, fst_size)
+
+
 def walk(entries: list[FstEntry], prefix: str = ""):
     for e in entries:
         path = f"{prefix}/{e.name}" if prefix else e.name
@@ -186,28 +206,37 @@ def walk(entries: list[FstEntry], prefix: str = ""):
             yield path, e
 
 
-def open_section(iso: Path, dol: Dol, section: DolSection) -> bytes:
-    with iso.open("rb") as f:
+def open_section(source: Path, dol: Dol, section: DolSection) -> bytes:
+    if source.is_dir():
+        raw = (source / "sys" / "main.dol").read_bytes()
+        return raw[section.file_offset:section.file_offset + section.size]
+    with source.open("rb") as f:
         f.seek(0x420)
         dol_offset = struct.unpack(">I", f.read(4))[0]
         f.seek(dol_offset + section.file_offset)
         return f.read(section.size)
 
 
-def cmd_info(iso: Path):
-    with iso.open("rb") as f:
-        hdr = f.read(0x440)
-        f.seek(0x440)
-        bi2 = f.read(0x40)
+def cmd_info(source: Path):
+    if source.is_dir():
+        hdr = (source / "sys" / "boot.bin").read_bytes()
+        bi2 = (source / "sys" / "bi2.bin").read_bytes()
+        size_text = "extracted folder"
+    else:
+        with source.open("rb") as f:
+            hdr = f.read(0x440)
+            f.seek(0x440)
+            bi2 = f.read(0x40)
+        size_text = f"{source.stat().st_size:,} bytes"
     magic, = struct.unpack_from(">I", hdr, 0x1C)
     dol_off, fst_off, fst_size, fst_max = struct.unpack_from(">IIII", hdr, 0x420)
     title = hdr[0x20:0x60].split(b"\x00")[0].decode("shift_jis", errors="replace")
-    dol, _ = read_dol(iso)
-    root, _, _ = parse_fst(iso)
+    dol, _ = read_dol(source)
+    root, _, _ = parse_fst(source)
     files = list(walk(root))
 
-    print(f"File:        {iso}")
-    print(f"Size:        {iso.stat().st_size:,} bytes")
+    print(f"File:        {source}")
+    print(f"Size:        {size_text}")
     print(f"Game ID:     {hdr[0:6].decode('ascii', errors='replace')}")
     print(f"Title:       {title}")
     print(f"Magic:       {magic:#010x} {'(GameCube)' if magic == GC_MAGIC else '(unexpected)'}")
@@ -245,12 +274,30 @@ def cmd_list(iso: Path, filt: str | None):
             print(f"{'-':1} {e.size:12}  {path}")
 
 
-def cmd_extract(iso: Path, out_dir: Path, filt: str | None):
-    root, _, _ = parse_fst(iso)
+def cmd_extract(source: Path, out_dir: Path, filt: str | None):
     out_dir.mkdir(parents=True, exist_ok=True)
+    if source.is_dir():
+        files_root = source / "files"
+        count = 0
+        total = 0
+        for path in files_root.rglob("*"):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(files_root).as_posix()
+            if filt and filt.lower() not in rel.lower():
+                continue
+            dest = out_dir / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, dest)
+            count += 1
+            total += path.stat().st_size
+        print(f"Extracted {count} files ({total:,} bytes) to {out_dir}")
+        return
+
+    root, _, _ = parse_fst(source)
     count = 0
     total = 0
-    with iso.open("rb") as f:
+    with source.open("rb") as f:
         for path, e in walk(root):
             if e.is_dir:
                 continue
@@ -287,6 +334,8 @@ def cmd_dol(iso: Path, out_dir: Path):
 
 
 def main(argv: list[str]) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     if len(argv) < 3:
         print(__doc__.strip())
         return 2

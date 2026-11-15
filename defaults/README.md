@@ -32,6 +32,11 @@ name into `GCPadNew.ini`, and offers a **Layout** selector:
   pad in Switch mode or any controller whose face buttons are swapped.
 - **Keyboard (WASD)** writes the keyboard profile.
 
+DualSense Edge (Sony `054C:0DF2`) and Xbox Elite Series 1/2 (Microsoft
+`045E:02E3`, `045E:0B00`, `045E:0B05`) are recognized by GUID and use the
+standard DualSense/Xbox mapping. Paddles, Fn and touchpad are intentionally
+ignored; use the standard face buttons, sticks, D-pad and triggers.
+
 The files above are templates. If one does not produce input, its `Device =`
 line does not match the name SDL reports; let the launcher generate the
 profile instead.

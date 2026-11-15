@@ -41,9 +41,93 @@ int main() {
   expect(moderngekko::frontend::DetectControllerLayout(
              "Steam Deck Controller") == ControllerLayout::Standard,
          "Steam Deck uses the standard layout");
+  const auto pro2_mapping =
+      "03000000c82d00000660000011010000,8BitDo Pro 2,a:b1,b:b0,"
+      "dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,x:b4,y:b3";
+  const auto ultimate_mapping =
+      "03000000c82d00001330000011010000,8BitDo Ultimate Wireless Controller,"
+      "a:b0,b:b1,dpleft:h0.8,dpright:h0.2,leftx:a0,lefty:a1,x:b3,y:b4";
+  const auto pro2_switch_mapping =
+      "05000000ac05000004000000fd216d04,8BitDo Pro 2,a:b3,b:b2,"
+      "dpleft:b10,dpright:b11,leftx:a0,lefty:a1~,x:b8,y:b7";
+  const auto micro_reversed_dpad =
+      "03000000c82d00002090000000000000,8BitDo Micro gamepad,a:b1,b:b0,"
+      "dpleft:h0.2,dpright:h0.8";
+
   expect(moderngekko::frontend::DetectControllerLayout("8BitDo Pro 2") ==
              ControllerLayout::Standard,
-         "8BitDo XInput uses the standard layout");
+         "name-only fallback cannot classify 8BitDo Pro 2");
+
+  expect(moderngekko::frontend::DetectControllerMapping("8BitDo Pro 2",
+                                                        pro2_mapping)
+                 .layout == ControllerLayout::Nintendo,
+         "8BitDo Pro 2 mapping uses the Nintendo layout");
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "8BitDo Ultimate Wireless Controller", ultimate_mapping)
+                 .layout == ControllerLayout::Standard,
+         "8BitDo Ultimate mapping uses the standard layout");
+  expect(moderngekko::frontend::DetectControllerMapping("8BitDo Pro 2",
+                                                        pro2_switch_mapping)
+                 .layout == ControllerLayout::Nintendo,
+         "8BitDo Pro 2 Switch-mode mapping uses the Nintendo layout");
+  const auto micro = moderngekko::frontend::DetectControllerMapping(
+      "8BitDo Micro gamepad", micro_reversed_dpad);
+  expect(micro.layout == ControllerLayout::Nintendo,
+         "8BitDo Micro uses the Nintendo layout");
+  expect(micro.swap_dpad_lr,
+         "reversed 8BitDo D-pad mapping is normalized");
+  expect(!moderngekko::frontend::DetectControllerMapping("8BitDo Pro 2",
+                                                         pro2_mapping)
+              .swap_dpad_lr,
+         "standard 8BitDo D-pad mapping is left alone");
+
+  const auto edge_mapping = "a:b1,b:b2,x:b0,y:b3";
+  const auto xbox_mapping = "a:b0,b:b1,x:b2,y:b3";
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "DualSense Edge Wireless Controller", edge_mapping,
+             "050000004c050000f20d000000010000")
+                 .layout == ControllerLayout::Standard,
+         "DualSense Edge Bluetooth GUID is standard");
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "DualSense Edge Wireless Controller", edge_mapping,
+             "030000004c050000f20d000000000000")
+                 .layout == ControllerLayout::Standard,
+         "DualSense Edge USB GUID is standard");
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "Xbox Elite Wireless Controller", xbox_mapping,
+             "030000005e040000e302000000000000")
+                 .layout == ControllerLayout::Standard,
+         "Xbox Elite 02E3 GUID is standard");
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "Xbox One Elite 2 Controller", xbox_mapping,
+             "050000005e040000000b000000783f80")
+                 .layout == ControllerLayout::Standard,
+         "Xbox Elite 0B00 GUID is standard");
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "Xbox Elite Wireless Controller", xbox_mapping,
+             "030000005e040000050b000003090000")
+                 .layout == ControllerLayout::Standard,
+         "Xbox Elite 0B05 GUID is standard");
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "Nintendo Switch Pro Controller", xbox_mapping,
+             "030000005e040000e302000000000000")
+                 .layout == ControllerLayout::Standard,
+         "Elite GUID overrides a Nintendo-looking name");
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "Nintendo Switch Pro Controller", edge_mapping,
+             "050000004c050000f20d000000010000")
+                 .layout == ControllerLayout::Standard,
+         "Edge GUID overrides a Nintendo-looking name");
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "PS5 Controller", edge_mapping,
+             "030000004c050000e60c000000007700")
+                 .layout == ControllerLayout::Standard,
+         "standard DualSense remains standard");
+  expect(moderngekko::frontend::DetectControllerMapping(
+             "Xbox Series X Controller", xbox_mapping,
+             "050000005e040000120b000000783f80")
+                 .layout == ControllerLayout::Standard,
+         "standard Xbox remains standard");
   expect(moderngekko::frontend::DetectControllerLayout(
              "Nintendo Switch Pro Controller") == ControllerLayout::Nintendo,
          "Switch Pro uses the Nintendo layout");
@@ -78,6 +162,99 @@ int main() {
          "Switch Pro X is physical Y");
   expect(Contains(generated, "Buttons/Y = `Button X`\n"),
          "Switch Pro Y is physical X");
+
+  expect(moderngekko::frontend::GenerateControllerConfig(
+             directory, "SDL/0/8BitDo Pro 2",
+             moderngekko::frontend::ControllerMapping{
+                 ControllerLayout::Nintendo, false},
+             &message),
+         "generate 8BitDo Pro 2 Nintendo profile");
+  generated = ReadFile(directory / "Config" / "GCPadNew.ini");
+  expect(Contains(generated, "Buttons/A = `Button B`\n"),
+         "8BitDo Pro 2 A is physical B");
+  expect(Contains(generated, "Buttons/B = `Button A`\n"),
+         "8BitDo Pro 2 B is physical A");
+  expect(Contains(generated, "Buttons/X = `Button Y`\n"),
+         "8BitDo Pro 2 X is physical Y");
+  expect(Contains(generated, "Buttons/Y = `Button X`\n"),
+         "8BitDo Pro 2 Y is physical X");
+
+  expect(moderngekko::frontend::GenerateControllerConfig(
+             directory, "SDL/0/8BitDo Micro",
+             moderngekko::frontend::ControllerMapping{
+                 ControllerLayout::Nintendo, true},
+             &message),
+         "generate 8BitDo Micro corrected D-pad profile");
+  generated = ReadFile(directory / "Config" / "GCPadNew.ini");
+  expect(Contains(generated, "D-Pad/Left = `Pad E` & `Shoulder L`\n"),
+         "8BitDo D-pad left corrected");
+  expect(Contains(generated, "D-Pad/Right = `Pad W` & `Shoulder L`\n"),
+         "8BitDo D-pad right corrected");
+
+  expect(moderngekko::frontend::GenerateControllerConfig(
+             directory, "SDL/0/DualSense Edge Wireless Controller",
+             moderngekko::frontend::ControllerMapping{
+                 ControllerLayout::Standard, false},
+             &message),
+         "generate DualSense Edge profile");
+  generated = ReadFile(directory / "Config" / "GCPadNew.ini");
+  expect(Contains(generated, "Buttons/A = `Button A`\n"), "Edge A");
+  expect(Contains(generated, "Buttons/B = `Button B`\n"), "Edge B");
+  expect(Contains(generated, "Buttons/X = `Button X`\n"), "Edge X");
+  expect(Contains(generated, "Buttons/Y = `Button Y`\n"), "Edge Y");
+  expect(generated.find("paddle") == std::string::npos &&
+             generated.find("misc") == std::string::npos &&
+             generated.find("touchpad") == std::string::npos,
+         "Edge paddles/Fn/touchpad are not bound");
+
+  expect(moderngekko::frontend::GenerateControllerConfig(
+             directory, "SDL/0/Xbox Elite Wireless Controller",
+             moderngekko::frontend::ControllerMapping{
+                 ControllerLayout::Standard, false},
+             &message),
+         "generate Xbox Elite profile");
+  generated = ReadFile(directory / "Config" / "GCPadNew.ini");
+  expect(Contains(generated, "Buttons/A = `Button A`\n"), "Elite A");
+  expect(Contains(generated, "Buttons/B = `Button B`\n"), "Elite B");
+  expect(Contains(generated, "Buttons/X = `Button X`\n"), "Elite X");
+  expect(Contains(generated, "Buttons/Y = `Button Y`\n"), "Elite Y");
+  expect(generated.find("paddle") == std::string::npos &&
+             generated.find("misc") == std::string::npos,
+         "Elite paddles are not bound");
+
+  const std::string default_standard =
+      "Buttons/A = `Button A`\nButtons/B = `Button B`\n"
+      "Buttons/X = `Button X`\nButtons/Y = `Button Y`\n"
+      "D-Pad/Left = `Pad W` & `Shoulder L`\n"
+      "D-Pad/Right = `Pad E` & `Shoulder L`\n";
+  const std::string default_nintendo =
+      "Buttons/A = `Button B`\nButtons/B = `Button A`\n"
+      "Buttons/X = `Button Y`\nButtons/Y = `Button X`\n"
+      "D-Pad/Left = `Pad W` & `Shoulder L`\n"
+      "D-Pad/Right = `Pad E` & `Shoulder L`\n";
+  expect(moderngekko::frontend::ControllerProfileIsDefault(default_standard,
+                                                           ControllerLayout::Standard),
+         "standard generated profile is recognized as default");
+  expect(moderngekko::frontend::ControllerProfileIsDefault(default_nintendo,
+                                                           ControllerLayout::Nintendo),
+         "Nintendo generated profile is recognized as default");
+  expect(!moderngekko::frontend::ControllerProfileIsDefault(
+             "Buttons/A = `Button A`\nButtons/B = Custom\n",
+             ControllerLayout::Standard),
+         "custom profile is not treated as default");
+  expect(moderngekko::frontend::ControllerProfileDpadSwapped(
+             "D-Pad/Left = `Pad E` & `Shoulder L`\n"
+             "D-Pad/Right = `Pad W` & `Shoulder L`\n"),
+         "swapped D-pad profile is detected");
+  expect(!moderngekko::frontend::ControllerProfileDpadSwapped(default_standard),
+         "standard D-pad profile is not flagged as swapped");
+
+  const auto buggy_8bitdo = moderngekko::frontend::DetectControllerMapping(
+      "8BitDo Pro 2", pro2_mapping);
+  expect(buggy_8bitdo.layout == ControllerLayout::Nintendo &&
+             moderngekko::frontend::ControllerProfileIsDefault(
+                 default_standard, ControllerLayout::Standard),
+         "existing default 8BitDo profile is migrated to Nintendo");
 
   expect(moderngekko::frontend::GenerateControllerConfig(
              directory, "DInput/0/Keyboard Mouse", ControllerLayout::Auto,

@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Verify every FST file exists in the extracted game root with the right size."""
+"""Verify every FST file exists in the extracted game root with the right size.
+
+Usage:
+    python tools/check_fst.py <game.iso|game-folder> <extracted-root>
+"""
 from __future__ import annotations
 
 import sys
@@ -10,9 +14,15 @@ import gcdisc
 
 
 def main() -> int:
-    iso = Path(sys.argv[1])
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    source = Path(sys.argv[1])
     root_dir = Path(sys.argv[2])
-    entries, fst_off, fst_size = gcdisc.parse_fst(iso)
+    if source.is_dir():
+        fst = (source / "sys" / "fst.bin").read_bytes()
+        entries, _, _ = gcdisc.parse_fst_bytes(fst)
+    else:
+        entries, fst_off, fst_size = gcdisc.parse_fst(source)
     files = [(p, e) for p, e in gcdisc.walk(entries) if not e.is_dir]
     dirs = [p for p, e in gcdisc.walk(entries) if e.is_dir]
 

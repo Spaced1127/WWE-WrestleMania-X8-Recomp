@@ -73,7 +73,7 @@ constexpr std::string_view CONTROLLER_PROFILE_NAME = "WiimoteNew.ini";
 #endif
 
 #ifndef WWE_RECOMP_VERSION
-#define WWE_RECOMP_VERSION "0.1.1"
+#define WWE_RECOMP_VERSION "0.1.2"
 #endif
 
 struct LauncherTheme
@@ -358,6 +358,8 @@ struct ControllerOption
 {
   std::string label;
   std::string device;
+  std::string guid;
+  std::string mapping;
 };
 
 constexpr moderngekko::frontend::ControllerLayout kControllerLayouts[] = {
@@ -426,6 +428,21 @@ std::vector<ControllerOption> EnumerateControllers()
     ControllerOption option;
     option.label = device_id == 0 ? name : name + " (" + std::to_string(device_id + 1) + ")";
     option.device = "SDL/" + std::to_string(device_id) + "/" + name;
+    const SDL_GUID guid = SDL_GetGamepadGUIDForID(joystick_id);
+    char guid_text[33]{};
+    SDL_GUIDToString(guid, guid_text, static_cast<int>(sizeof(guid_text)));
+    option.guid = guid_text;
+    char* mapping_value = SDL_GetGamepadMappingForID(joystick_id);
+    option.mapping = mapping_value ? mapping_value : "";
+    SDL_free(mapping_value);
+    std::cerr << "controller: name=\"" << name << "\" guid=" << option.guid
+              << " layout="
+              << moderngekko::frontend::ControllerLayoutName(
+                     moderngekko::frontend::DetectControllerMapping(option.device,
+                                                                    option.mapping,
+                                                                    option.guid)
+                         .layout)
+              << '\n';
     result.emplace_back(std::move(option));
   }
   SDL_free(joystick_ids);
@@ -1202,26 +1219,47 @@ int main(int argc, char** argv)
   }
   const auto select_controller = [&](int index)
   {
-    moderngekko::frontend::ControllerLayout layout = kControllerLayouts[layout_index];
+    const moderngekko::frontend::ControllerLayout selected_layout =
+        kControllerLayouts[layout_index];
+    moderngekko::frontend::ControllerLayout layout = selected_layout;
     std::string device = controllers[index].device;
-    if (layout == moderngekko::frontend::ControllerLayout::Keyboard ||
+    moderngekko::frontend::ControllerMapping mapping =
+        moderngekko::frontend::DetectControllerMapping(device, controllers[index].mapping,
+                                                       controllers[index].guid);
+    if (selected_layout == moderngekko::frontend::ControllerLayout::Keyboard ||
         device == KEYBOARD_DEVICE)
     {
       layout = moderngekko::frontend::ControllerLayout::Keyboard;
       device = std::string(KEYBOARD_DEVICE);
+      mapping = {moderngekko::frontend::ControllerLayout::Keyboard, false};
+      for (int i = 0; i < kControllerLayoutCount; ++i)
+      {
+        if (kControllerLayouts[i] == moderngekko::frontend::ControllerLayout::Keyboard)
+          layout_index = i;
+      }
     }
+    else if (selected_layout != moderngekko::frontend::ControllerLayout::Auto)
+    {
+      mapping.layout = selected_layout;
+      layout = selected_layout;
+    }
+    else
+    {
+      layout = mapping.layout;
+    }
+    if (mapping.layout == moderngekko::frontend::ControllerLayout::Keyboard)
+    {
+      mapping.swap_dpad_lr = false;
+      device = std::string(KEYBOARD_DEVICE);
+    }
+
     std::string message;
-    if (!moderngekko::frontend::GenerateControllerConfig(user_directory, device, layout,
+    if (!moderngekko::frontend::GenerateControllerConfig(user_directory, device, mapping,
                                                          &message))
     {
       std::lock_guard lock(dialog.mutex);
       dialog.error = std::move(message);
       return false;
-    }
-    for (int i = 0; i < kControllerLayoutCount; ++i)
-    {
-      if (kControllerLayouts[i] == layout)
-        layout_index = i;
     }
     selected_controller = device;
     controller_index = FindController(controllers, device);
@@ -1230,7 +1268,10 @@ int main(int argc, char** argv)
     config.controllers = configured_controllers;
     config.resolution = resolutions[resolution_index].text;
     config.show_fps_in_title = show_fps_in_title;
-    config.controller_layout = moderngekko::frontend::ControllerLayoutName(layout);
+    config.controller_layout = moderngekko::frontend::ControllerLayoutName(
+        layout == moderngekko::frontend::ControllerLayout::Keyboard
+            ? moderngekko::frontend::ControllerLayout::Keyboard
+            : selected_layout);
     if (!save_config())
       return false;
     controller_profile_exists = true;
@@ -2278,14 +2319,27 @@ int main(int argc, char** argv)
           kControllerLayouts[layout_index];
       if (preview_layout == moderngekko::frontend::ControllerLayout::Auto)
       {
+        const std::string mapping_text =
+            controller_index >= 0 &&
+                    static_cast<std::size_t>(controller_index) < controllers.size()
+                ? controllers[controller_index].mapping
+                : std::string{};
+        const std::string guid_text =
+            controller_index >= 0 &&
+                    static_cast<std::size_t>(controller_index) < controllers.size()
+                ? controllers[controller_index].guid
+                : std::string{};
+        const moderngekko::frontend::ControllerMapping detected =
+            moderngekko::frontend::DetectControllerMapping(selected_controller,
+                                                           mapping_text, guid_text);
         preview_layout = selected_controller.empty()
                              ? moderngekko::frontend::ControllerLayout::Standard
-                             : moderngekko::frontend::DetectControllerLayout(
-                                   selected_controller);
+                             : detected.layout;
         if (!selected_controller.empty())
           ImGui::TextDisabled(
-              "Detected: %s",
-              kControllerLayoutShortLabels[static_cast<int>(preview_layout)]);
+              "Detected: %s%s",
+              kControllerLayoutShortLabels[static_cast<int>(preview_layout)],
+              detected.swap_dpad_lr ? " (D-pad L/R corrected)" : "");
       }
 
       ImGui::BeginDisabled(controller_index < 0);

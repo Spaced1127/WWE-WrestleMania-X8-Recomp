@@ -18,6 +18,20 @@ enum class ControllerLayout {
 const char *ControllerLayoutName(ControllerLayout layout);
 ControllerLayout DetectControllerLayout(std::string_view device);
 
+// A controller's button family plus any D-pad left/right correction needed by
+// its SDL mapping. DetectControllerMapping parses the live SDL mapping string,
+// so 8BitDo Switch-mode and XInput-mode pads are handled per GUID/report, not
+// by a name guess.
+struct ControllerMapping {
+  ControllerLayout layout = ControllerLayout::Standard;
+  bool swap_dpad_lr = false;
+};
+ControllerMapping DetectControllerMapping(std::string_view device,
+                                          std::string_view sdl_mapping = {},
+                                          std::string_view sdl_guid = {});
+bool ControllerProfileIsDefault(std::string_view text, ControllerLayout layout);
+bool ControllerProfileDpadSwapped(std::string_view text);
+
 struct ResolutionOption {
   const char *text;
   int dolphin_scale;
@@ -81,11 +95,17 @@ bool GenerateControllerConfig(const std::filesystem::path &user_directory,
                               std::span<const std::string> controllers,
                               ControllerLayout layout, std::string *message);
 bool GenerateControllerConfig(const std::filesystem::path &user_directory,
+                              std::span<const std::string> controllers,
+                              ControllerMapping mapping, std::string *message);
+bool GenerateControllerConfig(const std::filesystem::path &user_directory,
                               std::string_view controller,
                               std::string *message);
 bool GenerateControllerConfig(const std::filesystem::path &user_directory,
                               std::string_view controller,
                               ControllerLayout layout, std::string *message);
+bool GenerateControllerConfig(const std::filesystem::path &user_directory,
+                              std::string_view controller,
+                              ControllerMapping mapping, std::string *message);
 bool EnsureControllerConfig(const std::filesystem::path &user_directory,
                             std::span<const std::string> controllers,
                             std::string *message);

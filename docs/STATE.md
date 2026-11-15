@@ -29,11 +29,33 @@ build output stay out of version control.
 | FST | 5,773 entries, `0x1e7dc` bytes at ISO `0x229900` |
 | DOL sections | 2 text, 8 data |
 
-Source image: `WWE WrestleMania X8 (USA).rvz` (908,764,000 bytes), decompressed
-with `tools/rvz_extract.py` to `work/disc/game.iso`.
+Source image: `WWE WrestleMania X8 (USA).rvz` (908,764,000 bytes), read
+natively by the launcher and `tools/extract_game.ps1` through Dolphin DiscIO.
+The `work/disc/game.iso` copy is only an inventory reference; the play/build
+path does not convert RVZ to ISO.
 
-`python tools/verify_dol.py work/disc/game.iso work/game/sys/main.dol` reports
-size, SHA-256 and SHA-1 all OK, zero byte differences.
+`python tools/verify_dol.py work/game work/game/sys/main.dol` reports size,
+SHA-256 and SHA-1 all OK, zero byte differences. The same check passes for the
+RVZ-extracted folder.
+
+## RVZ native input (2026-11-15)
+
+The launcher `--extract` path and `tools/extract_game.ps1` read `.rvz` directly.
+The project RVZ and its ISO were extracted with the same launcher build into
+separate roots:
+
+| Check | Result |
+|---|---|
+| Files | 5,271 both |
+| Bytes | 1,414,424,163 both |
+| Tree manifest SHA-256 | `b019760f7429ecfa9543d055a88bf841b9dd02749dd79ed6732af9959e59d725` both |
+| DOL SHA-256 | `91af3136f2a48c18a6b96a5726d1f171c9e714bb8d4d504f835070fc230a303e` both |
+| FST SHA-256 | `c7f82d550d7ddee726f1e52646acfff8384b8f4836d790dc4d772a8013e1d4bb` both |
+| boot / bi2 / apploader | identical |
+
+No RVZ-to-ISO conversion is used in the play/build path. The v0.1.2 runner
+boots from the RVZ-extracted tree and holds **59.93 fps / 1.003** in the Fatal
+4 Way on a hidden desktop.
 
 ## Asset profile (FST)
 
@@ -73,9 +95,9 @@ so no cold DolRecomp/ModernGekko build is needed:
 
 | Step | State |
 |---|---|
-| RVZ decompressed to ISO | done |
+| RVZ / ISO native input | done, byte-identical |
 | Disc / DOL / FST inventoried | done |
-| DOL hash verified against ISO | done |
+| DOL hash verified against ISO and RVZ | done |
 | Game root extracted (`sys/` + `files/`) | done |
 | Static C module generated + compiled | done |
 | First boot in ModernGekko | done |
@@ -89,7 +111,7 @@ so no cold DolRecomp/ModernGekko build is needed:
 | 1v1 performance | 59.91 fps / 0.995 with Cubeb |
 | PGO | collected, not needed (idle-loop dominated) |
 | Branded launcher / runner | done, parity patched |
-| v0.1.1 release zip | done, no game data |
+| v0.1.2 release zip | done, no game data |
 
 ## Module
 
@@ -251,6 +273,12 @@ Nintendo, Wii U or Pro Controller; everything else uses the standard
 positional layout. The manual Nintendo option covers 8BitDo pads in Switch
 mode and any pad whose face buttons are swapped.
 
+GUID-level families:
+- DualSense Edge (Sony `054C:0DF2`, USB and Bluetooth) -> standard DualSense
+  layout. Paddles, Fn and touchpad are intentionally not bound.
+- Xbox Elite Series 1/2 (Microsoft `045E:02E3`, `045E:0B00`, `045E:0B05`) ->
+  standard Xbox layout. P1-P4 paddles are intentionally not bound.
+
 **D-pad in WMX8 is taunt**, not movement. Verified with automation on the
 main menu: D-pad Down leaves the highlight on EXHIBITION, so the game's menus
 read only the main stick. In a match the D-pad triggers taunts 1-4 and the
@@ -268,7 +296,7 @@ D-Pad/Up      = `Pad N` & `Shoulder L`
 Menus: D-pad or left stick. Match: D-pad moves, L1 + D-pad taunts. A standalone
 copy is `defaults/GCPadNew.dualsense-menu.ini`.
 
-## Launcher and v0.1.1 release
+## Launcher and v0.1.2 release
 
 The launcher and runner are built from the local copy at
 `lib\ModernGekko-Template\lib\ModernGekko` (the SpongeBob launcher source plus
@@ -324,9 +352,9 @@ Two runtime fixes were needed for this title:
 Release artifact:
 
 ```
-dist\WrestleManiaX8Recomp-v0.1.1-Windows-x64.zip   19,570,397 bytes
-SHA-256 85887C822B074BDF73B2A9A0C9A28FCBDEEF75E6CD3590DC1205515A8C272E8B
-Release https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.1
+dist\WrestleManiaX8Recomp-v0.1.2-Windows-x64.zip   19,580,869 bytes
+SHA-256 E22F48D2808471CAB4ED0E22C85DAF31D187264BCEA61A90FE87ADCF1D0064FB
+Release https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.2
 ```
 
 Contents: launcher, runner, `gGW3E78_recomp.dll`, pruned `Sys/` (GC,
@@ -340,12 +368,13 @@ Note: the extraction still creates the disc's five non-ASCII "copy" entries
 (one directory tree). They are not referenced by normal gameplay and the
 loader ignores them; they are not shipped.
 
-Release verification (2026-11-14):
+Release verification (2026-11-15):
 
 - [x] `WrestleManiaX8Recomp.exe` and `WrestleManiaX8RecompRunner.exe` build
       with the WMX8 icon resources.
-- [x] `--extract` on the retail ISO exits 0 and writes `Game` +
-      `default-game.txt`.
+- [x] `--extract` on the retail ISO and the project RVZ both exit 0 and write
+      byte-identical `Game` trees (5,271 files; manifest
+      `b019760f…`).
 - [x] `--play` starts the runner with `--core static`; the runner loads
       `gGW3E78_recomp.dll` from the release folder and reaches 59.9 fps.
 - [x] The zip's runner loads the module and the `match.sav` state
@@ -354,8 +383,8 @@ Release verification (2026-11-14):
 - [x] `recomplauncher.json` validates against the SDK schema (0 errors).
 - [x] Icon extraction from both exes shows the SteamGridDB Austin icon.
 - [x] The zip's launcher loads `resources/background.png` and the WMX8 theme.
-- [x] The v0.1.1 zip's runner holds **59.95 fps / 1.006** in the Fatal 4 Way
-      with Cubeb audio, minimized, high priority and affinity `0xFF`.
+- [x] The v0.1.2 zip's runner holds **59.86 fps / 1.001** in the Fatal 4 Way
+      with Null audio on a hidden desktop, high priority and affinity `0xFF`.
 - [x] RecompLauncher scenario: a fresh user dir with no custom launcher, the
       runner auto-detects the pad and writes `Config\GCPadNew.ini` itself.
 - [x] `controller_layout=nintendo` in `config.ini` regenerates the profile
@@ -363,14 +392,29 @@ Release verification (2026-11-14):
 - [x] The keyboard layout writes `DInput/0/Keyboard Mouse` with
       Enter/Backspace/WASD bindings, and `--controller-layout` works for
       scripted launches.
-- [x] Controller layout tests pass for DualSense, DualShock 4, Xbox 360,
-      Steam Deck, 8BitDo, Switch Pro, Joy-Con, Wii U Pro and keyboard,
-      including Nintendo A/B and X/Y swapping and keyboard bindings.
+- [x] 8BitDo mapping tests: Pro 2 `a:b1,b:b0` -> Nintendo; Ultimate
+      `a:b0,b:b1` -> standard; Pro 2 Switch-mode `a:b3,b:b2` -> Nintendo;
+      Micro reversed D-pad -> `D-Pad/Left = Pad E`, `Right = Pad W`.
+- [x] The name-only fallback still returns Standard for 8BitDo Pro 2; the
+      mapping-aware path returns Nintendo (root-cause regression test).
+- [x] Existing default 8BitDo profiles migrate to the detected Nintendo
+      layout; custom profiles are preserved.
+- [x] DualSense Edge (Sony `054C:0DF2`, USB/Bluetooth) and Xbox Elite
+      (`045E:02E3`, `045E:0B00`, `045E:0B05`) GUID tests -> standard layout;
+      Edge/Elite GUIDs override a Nintendo-looking name; no paddle/Fn/touchpad
+      bindings; standard DualSense/Xbox unchanged.
+- [x] Startup diagnostics log the SDL name, GUID, chosen layout and D-pad
+      state.
+- [x] Controller layout tests pass for DualSense, DualSense Edge, DualShock 4,
+      Xbox 360, Xbox Elite 1/2, Steam Deck, 8BitDo
+      (Pro 2/Ultimate/Switch-mode/Micro), Switch Pro, Joy-Con, Wii U Pro and
+      keyboard, including Nintendo A/B and X/Y swapping, D-pad correction and
+      keyboard bindings.
 - [x] The zip's `defaults/` contains 14 profiles: DualSense, DualSense menu,
       DualShock 4/3, Xbox, Xbox 360, Steam Deck, 8BitDo, Switch Pro, Joy-Con,
       Wii U Pro, GameCube adapter, generic and keyboard.
 - [x] The zip's runner and module are byte-identical to the release folder
-      (`CE4C00B4…`, `B4264EEE…`).
+      (`79E69136…`, `B4264EEE…`).
 - [x] Theme audit: no other-title branding or disc IDs in shipped
       launcher/config/docs files; Dolphin's generic `Sys/Shaders` collection is
       unmodified.
