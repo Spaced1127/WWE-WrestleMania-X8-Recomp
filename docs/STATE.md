@@ -536,6 +536,45 @@ Recorded exceptions:
 
 ## Next actions
 
+> **HUB PAUSE (2026-11-16): no GUI or test launches.** The user is on the
+> machine, so no launcher, runner, game or other window may be started, hidden
+> or otherwise, until the hub lifts the pause. Host-side work (code, analysis,
+> GUI-free builds, docs, offline test binaries) continues.
+
+Blocked until the pause lifts:
+
+1. Pad-present controller paths on real hardware: Xbox 360/One pad, DualSense
+   Edge, 8BitDo Pro 2 in both modes, Elite S1/S2. Expected log line:
+   `controller: name=… guid=… layout=… dpad=…` (layout=standard for all Xbox,
+   `dpad=normal` for DualSense/Edge).
+2. WMX8 save written by the game onto the raw card, then save→load. Recipe:
+   fresh user dir, boot visibly, title → START → menu → change an option or
+   reach the System Data save, then stop with `command=stop` (force-kill skips
+   the card flush). Check with `python tools/memcard_check.py <card>` and the
+   card SHA before/after.
+
+Host-side tooling ready for that check (no GUI needed):
+
+```
+python tools/memcard_check.py <user>/GC/MemoryCardA.USA.raw
+  -> size, SHA-256, directory checksum, BAT free blocks, saved entries
+python tools/memcard_check.py --gci "<save>.gci"
+  -> one directory entry (gamecode/makercode/filename/blocks)
+```
+
+Validated against the real folder-era save `78-GW3E-__2f__w_mania2002.gci`
+(`GW3E-78 "/w_mania2002" blocks=14 first=5 file_bytes=114688`) and against the
+empty raw cards created by v0.1.3 (`checksum ok`, `free=2043`, `saves 0`).
+3. Fatal 4 Way / Battle Royal / entrance performance sweep.
+
+Ready once a pad or a run is allowed:
+
+- v0.1.3 is published; the release notes ask players for the startup line.
+- `tools/memcard_check.py` (host-side) validates a card and lists entries, so
+  the save/load check is one command after a manual save.
+
+Previously planned:
+
 1. Publish v0.1.3 once the hub/user approves (no commit or push yet).
 2. Re-test with a physical Xbox pad, DualSense Edge and 8BitDo Pro 2 on this
    machine: the pad-present branch (device found, profile reused) has no live
