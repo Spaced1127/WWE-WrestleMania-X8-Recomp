@@ -5,6 +5,11 @@ Rules and context for any agent working in this project. Read
 
 ## Hard rules
 
+- **User directive 2026-11-16: quiet mode lifted.** Launch test apps normally so
+  their windows are visible on the user's desktop. Do not use
+  `H:\Orchestration\tools\run-hidden.ps1`, do not hide/minimize/move windows,
+  and do not kill test-app windows to get them out of the way. It is the user's
+  call if a run is disruptive.
 - **No game data** in Git, releases, fixtures or docs: no ISO/RVZ/GCM/WBFS,
   DOL, FST, `work/game/`, textures, audio, saves or cover art.
 - **Do not edit generated C** (`build/modules/**/generated/**`). Fix the

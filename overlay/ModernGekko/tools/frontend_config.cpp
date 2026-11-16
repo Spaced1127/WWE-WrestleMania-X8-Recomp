@@ -100,7 +100,35 @@ std::optional<std::uint16_t> GuidWord(std::string_view guid,
                                     (((high << 4) | high2) << 8));
 }
 
-enum class ControllerGuidFamily { Unknown, DualSenseEdge, XboxElite };
+enum class ControllerGuidFamily { Unknown, DualSenseEdge, XboxElite, NintendoSwitch };
+
+// USB vendor IDs that report the Nintendo button order.
+constexpr std::uint16_t kNintendoVendor = 0x057e; // Switch Pro, Joy-Con, NSO pads
+constexpr std::uint16_t kAppleVendor = 0x05ac;    // 8BitDo Switch-mode reports here
+constexpr std::uint16_t kEightBitDoVendorA = 0xc82d;
+constexpr std::uint16_t kEightBitDoVendorB = 0x2dc8;
+constexpr std::uint16_t kEightBitDoSwitchProduct = 0x0004;
+
+bool IsEightBitDoVendor(std::string_view name_lower,
+                        std::optional<std::uint16_t> vendor,
+                        std::optional<std::uint16_t> product) {
+  if (name_lower.find("8bitdo") != std::string_view::npos)
+    return true;
+  if (!vendor || !product)
+    return false;
+  if (*vendor == kEightBitDoVendorA || *vendor == kEightBitDoVendorB)
+    return true;
+  return *vendor == kAppleVendor && *product == kEightBitDoSwitchProduct;
+}
+
+bool IsNintendoName(std::string_view name_lower) {
+  return name_lower.find("switch") != std::string_view::npos ||
+         name_lower.find("joy-con") != std::string_view::npos ||
+         name_lower.find("joycon") != std::string_view::npos ||
+         name_lower.find("nintendo") != std::string_view::npos ||
+         name_lower.find("pro controller") != std::string_view::npos ||
+         name_lower.find("wii u") != std::string_view::npos;
+}
 
 ControllerGuidFamily ClassifyControllerGuid(std::string_view guid) {
   const std::optional<std::uint16_t> vendor = GuidWord(guid, 8);
@@ -109,9 +137,13 @@ ControllerGuidFamily ClassifyControllerGuid(std::string_view guid) {
     return ControllerGuidFamily::Unknown;
   if (*vendor == 0x054c && *product == 0x0df2)
     return ControllerGuidFamily::DualSenseEdge;
-  if (*vendor == 0x045e &&
-      (*product == 0x02e3 || *product == 0x0b00 || *product == 0x0b05))
+  if (*vendor == 0x045e && (*product == 0x02e3 || *product == 0x0b00 ||
+                            *product == 0x0b05 || *product == 0x0b22))
     return ControllerGuidFamily::XboxElite;
+  if (*vendor == kNintendoVendor)
+    return ControllerGuidFamily::NintendoSwitch;
+  if (*vendor == kAppleVendor && *product == kEightBitDoSwitchProduct)
+    return ControllerGuidFamily::NintendoSwitch;
   return ControllerGuidFamily::Unknown;
 }
 
@@ -221,15 +253,7 @@ ControllerLayout DetectControllerLayout(std::string_view device) {
   const std::string lower = Lower(std::string(device));
   if (lower.find("keyboard") != std::string::npos)
     return ControllerLayout::Keyboard;
-  // Nintendo's face buttons are labelled in the opposite order from the
-  // GameCube pad, so SDL's Button A/B and X/Y need swapping. This covers the
-  // Switch Pro Controller, Joy-Con, Switch Online pads and Wii U Pro pads.
-  if (lower.find("switch") != std::string::npos ||
-      lower.find("joy-con") != std::string::npos ||
-      lower.find("joycon") != std::string::npos ||
-      lower.find("nintendo") != std::string::npos ||
-      lower.find("pro controller") != std::string::npos ||
-      lower.find("wii u") != std::string::npos)
+  if (IsNintendoName(lower))
     return ControllerLayout::Nintendo;
   // Xbox, PlayStation, Steam Deck, 8BitDo in XInput mode, the GameCube
   // adapter and generic SDL pads all use the standard positional layout.
@@ -246,6 +270,9 @@ ControllerMapping DetectControllerMapping(std::string_view device,
     return result;
   }
 
+  const std::optional<std::uint16_t> vendor = GuidWord(sdl_guid, 8);
+  const std::optional<std::uint16_t> product = GuidWord(sdl_guid, 16);
+  const bool eightbitdo = IsEightBitDoVendor(lower, vendor, product);
   const ControllerGuidFamily family = ClassifyControllerGuid(sdl_guid);
   if (family == ControllerGuidFamily::DualSenseEdge ||
       family == ControllerGuidFamily::XboxElite) {
@@ -253,21 +280,19 @@ ControllerMapping DetectControllerMapping(std::string_view device,
     // are intentionally not bound; the standard face buttons, sticks, D-pad
     // and triggers behave exactly like the base DualSense/Xbox pads.
     result.layout = ControllerLayout::Standard;
-  } else if (lower.find("switch") != std::string::npos ||
-             lower.find("joy-con") != std::string::npos ||
-             lower.find("joycon") != std::string::npos ||
-             lower.find("nintendo") != std::string::npos ||
-             lower.find("pro controller") != std::string::npos ||
-             lower.find("wii u") != std::string::npos) {
-    // Keep the established name rule for Nintendo first-party pads. Their SDL
-    // DB entries are not consistent about a/b ordering across firmware, but the
-    // project has always treated the printed labels as the reference.
+  } else if (family == ControllerGuidFamily::NintendoSwitch ||
+             IsNintendoName(lower)) {
+    // Nintendo first-party pads and 8BitDo's Switch-mode report print A/B and
+    // X/Y the other way round from the GameCube pad.
     result.layout = ControllerLayout::Nintendo;
-  } else {
-    // 8BitDo is the important case: Pro 2/SN30/SF30/N30 and the Switch-mode
-    // report use a:b1,b:b0 (or a:b3,b:b2), while the Ultimate and 64 families
-    // use a:b0,b:b1. Read the live SDL mapping rather than guessing from the
-    // product name, so XInput and Switch modes are both correct.
+  } else if (eightbitdo) {
+    // Only 8BitDo is decided from the live mapping: their own DB rows are
+    // consistent (Pro 2/SN30/FC30/M30-Bluetooth use a:b1,b:b0, the Ultimate
+    // and 64 families use a:b0,b:b1), and their odd GUID vendor words mean a
+    // product table cannot tell them apart. Applying this rule to every pad
+    // flipped 219 of the SDL DB's 812 rows - third-party Xbox-shape pads,
+    // Betop/Buffalo/Cideko and the Steam virtual pad among them - so it now
+    // stops at the 8BitDo family.
     const std::optional<int> a = ButtonIndex(MappingValue(sdl_mapping, "a"));
     const std::optional<int> b = ButtonIndex(MappingValue(sdl_mapping, "b"));
     if (a && b && *a != *b)
@@ -275,23 +300,33 @@ ControllerMapping DetectControllerMapping(std::string_view device,
                               : ControllerLayout::Standard;
     else
       result.layout = DetectControllerLayout(device);
+  } else {
+    // Xbox, PlayStation, Steam Deck, the GameCube adapter and every other SDL
+    // pad keep the standard positional layout. Their face-button order is not
+    // inferred from button indices: SDL numbers the DualSense D-pad
+    // 12/14/15/13 and several third-party rows use a:b1 for a standard pad.
+    result.layout = ControllerLayout::Standard;
   }
 
   // Some 8BitDo reports expose the D-pad in the opposite left/right order.
-  // Correct it from the mapping itself; the standard 8BitDo entries in the
-  // shipped SDL DB are already left/right correct and stay unchanged.
+  // Hat-based bindings are checked for every pad because the mask test is
+  // exact; button-index bindings only for 8BitDo, whose own numbering runs
+  // backwards. (The DualSense family binds dpleft:b15,dpright:b13 without
+  // being reversed, which the index rule alone got wrong.)
   const std::string_view left = MappingValue(sdl_mapping, "dpleft");
   const std::string_view right = MappingValue(sdl_mapping, "dpright");
   if (!left.empty() && !right.empty()) {
     if (left.starts_with("h") && right.starts_with("h")) {
       result.swap_dpad_lr = left == "h0.2" && right == "h0.8";
-    } else {
+    } else if (eightbitdo) {
       const std::optional<int> left_button = ButtonIndex(left);
       const std::optional<int> right_button = ButtonIndex(right);
       if (left_button && right_button)
         result.swap_dpad_lr = *left_button > *right_button;
       else if (left.starts_with("+") && right.starts_with("-"))
         result.swap_dpad_lr = true;
+    } else if (left.starts_with("+") && right.starts_with("-")) {
+      result.swap_dpad_lr = true;
     }
   }
   return result;
@@ -300,6 +335,157 @@ ControllerMapping DetectControllerMapping(std::string_view device,
 bool ControllerProfileDpadSwapped(std::string_view text) {
   return text.find("D-Pad/Left = `Pad E`") != std::string_view::npos &&
          text.find("D-Pad/Right = `Pad W`") != std::string_view::npos;
+}
+
+std::string ControllerProfileDevice(std::string_view text) {
+  constexpr std::string_view marker = "Device = ";
+  const std::size_t start = text.find(marker);
+  if (start == std::string_view::npos)
+    return {};
+  const std::size_t begin = start + marker.size();
+  const std::size_t end = text.find_first_of("\r\n", begin);
+  return std::string(text.substr(begin, end == std::string_view::npos
+                                            ? std::string_view::npos
+                                            : end - begin));
+}
+
+ControllerLayout ControllerProfileLayout(std::string_view text) {
+  if (text.find("Buttons/A = `RETURN`") != std::string_view::npos)
+    return ControllerLayout::Keyboard;
+  if (text.find("Buttons/A = `Button B`") != std::string_view::npos)
+    return ControllerLayout::Nintendo;
+  return ControllerLayout::Standard;
+}
+
+bool ControllerConfigNeedsRewrite(std::string_view existing,
+                                  std::string_view device,
+                                  ControllerMapping mapping,
+                                  ControllerLayout requested_layout) {
+  // No pad enumerated means nothing was detected: keep whatever profile is on
+  // disk. Rewriting there produced a keyboard profile for a sleeping wireless
+  // pad, and the pad stayed dead for the whole session.
+  if (existing.empty())
+    return true;
+  if (device.empty())
+    return false;
+
+  const std::string existing_device = ControllerProfileDevice(existing);
+  const ControllerLayout existing_layout = ControllerProfileLayout(existing);
+  const bool existing_dpad_swapped = ControllerProfileDpadSwapped(existing);
+
+  bool regenerate = existing_device != device;
+  if (!regenerate && requested_layout != ControllerLayout::Auto)
+    regenerate = existing_layout != mapping.layout;
+  if (!regenerate && requested_layout == ControllerLayout::Auto &&
+      existing_layout != mapping.layout &&
+      ControllerProfileIsDefault(existing, existing_layout))
+    regenerate = true;
+  if (!regenerate && existing_dpad_swapped != mapping.swap_dpad_lr &&
+      ControllerProfileIsDefault(existing, existing_layout))
+    regenerate = true;
+  return regenerate;
+}
+
+bool EnsureMemoryCardSlots(const std::filesystem::path &user_directory,
+                           bool *changed) {
+  const fs::path path = user_directory / "Config" / "Dolphin.ini";
+  std::string text;
+  {
+    std::ifstream input(path);
+    if (input)
+      text.assign(std::istreambuf_iterator<char>(input),
+                  std::istreambuf_iterator<char>());
+  }
+
+  // Rewrite [Core] SlotA/SlotB in place, creating the section or the file when
+  // needed. Every other line is preserved.
+  std::vector<std::string> lines;
+  {
+    std::string line;
+    std::istringstream input(text);
+    while (std::getline(input, line)) {
+      if (!line.empty() && line.back() == '\r')
+        line.pop_back();
+      lines.emplace_back(std::move(line));
+    }
+  }
+
+  bool in_core = false;
+  bool section_found = false;
+  bool slot_a_set = false;
+  bool slot_b_set = false;
+  std::size_t core_last_key = 0;
+  for (std::size_t i = 0; i < lines.size(); ++i) {
+    const std::string trimmed = Trim(lines[i]);
+    if (trimmed.starts_with('[') && trimmed.ends_with(']')) {
+      in_core = Lower(trimmed) == "[core]";
+      if (in_core) {
+        section_found = true;
+        core_last_key = i;
+      }
+      continue;
+    }
+    if (!in_core || trimmed.empty() || trimmed[0] == '#' || trimmed[0] == ';')
+      continue;
+    const std::size_t separator = trimmed.find('=');
+    if (separator == std::string::npos)
+      continue;
+    const std::string key = Lower(Trim(trimmed.substr(0, separator)));
+    if (key == "slota") {
+      lines[i] = "SlotA = 1";
+      slot_a_set = true;
+      core_last_key = i;
+    } else if (key == "slotb") {
+      lines[i] = "SlotB = 255";
+      slot_b_set = true;
+      core_last_key = i;
+    } else {
+      core_last_key = i;
+    }
+  }
+
+  if (!section_found) {
+    if (!lines.empty() && lines.back().empty())
+      lines.pop_back();
+    lines.emplace_back("[Core]");
+    core_last_key = lines.size() - 1;
+  }
+  std::vector<std::string> inserts;
+  if (!slot_a_set)
+    inserts.emplace_back("SlotA = 1");
+  if (!slot_b_set)
+    inserts.emplace_back("SlotB = 255");
+  if (!inserts.empty())
+    lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(core_last_key) + 1,
+                 inserts.begin(), inserts.end());
+
+  std::string output;
+  for (const std::string &line : lines) {
+    output += line;
+    output += '\n';
+  }
+  if (output == text) {
+    if (changed)
+      *changed = false;
+    return true;
+  }
+  std::error_code ec;
+  fs::create_directories(path.parent_path(), ec);
+  std::ofstream stream(path, std::ios::trunc);
+  if (!stream) {
+    if (changed)
+      *changed = false;
+    return false;
+  }
+  stream << output;
+  if (!stream) {
+    if (changed)
+      *changed = false;
+    return false;
+  }
+  if (changed)
+    *changed = true;
+  return true;
 }
 
 bool ControllerProfileIsDefault(std::string_view text,

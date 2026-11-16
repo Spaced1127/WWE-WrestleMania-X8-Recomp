@@ -276,8 +276,22 @@ mode and any pad whose face buttons are swapped.
 GUID-level families:
 - DualSense Edge (Sony `054C:0DF2`, USB and Bluetooth) -> standard DualSense
   layout. Paddles, Fn and touchpad are intentionally not bound.
-- Xbox Elite Series 1/2 (Microsoft `045E:02E3`, `045E:0B00`, `045E:0B05`) ->
-  standard Xbox layout. P1-P4 paddles are intentionally not bound.
+- Xbox Elite Series 1/2 (Microsoft `045E:02E3`, `045E:0B00`, `045E:0B05`,
+  `045E:0B22`) -> standard Xbox layout. P1-P4 paddles are intentionally not
+  bound.
+
+Layout heuristic scope (fixed in v0.1.3): the live-mapping A/B rule applies to
+the 8BitDo family only (name or `c82d`/`2dc8` vendor, or `05AC:0004` Switch
+mode). Applying it to every pad flipped 219 of the SDL DB's 812 rows. The
+button-index D-pad correction is likewise 8BitDo-only, because the DualSense
+family binds `dpleft:b15,dpright:b13` without being reversed. Nintendo names
+and Nintendo/8BitDo-Switch GUIDs still select the Nintendo layout.
+
+Profile scan (fixed in v0.1.3): the runner applies Dolphin's SDL hints
+(`JOYSTICK_DIRECTINPUT`, `HIDAPI_GAMECUBE`, Joy-Con combine hints), initialises
+joystick/haptic/gamepad only, and leaves them running for the runtime. It never
+rewrites `GCPadNew.ini` when no gamepad enumerated, and falls back to the first
+connected pad when the configured one is missing.
 
 **D-pad in WMX8 is taunt**, not movement. Verified with automation on the
 main menu: D-pad Down leaves the highlight on EXHIBITION, so the game's menus
@@ -420,6 +434,63 @@ Release verification (2026-11-15):
       unmodified.
 - [ ] Upload/download-back hash check (no public release yet).
 
+## Controller hotfix v0.1.3 (2026-11-16)
+
+Reported after v0.1.2: Xbox pads not responding at all; DualSense Edge and
+8BitDo behaviour in doubt.
+
+Root cause (Xbox): the v0.1.2 pre-boot scan rewrote `Config\GCPadNew.ini` even
+when it enumerated no pad. A wireless Xbox pad still waking up therefore got a
+keyboard profile, and the pad connected a second later with no bindings. The
+scan also ran with a different SDL driver set than the runtime (video+gamepad
+init, then `SDL_Quit()`, no Dolphin hints), so the stored `Device =` name could
+differ from the runtime's enumeration.
+
+Also fixed: the blanket `a>b` mapping rule (219/812 SDL DB rows affected) is
+now 8BitDo-only; the button-index D-pad correction no longer mirrors DualSense
+and DualSense Edge (`dpleft:b15,dpright:b13`); Xbox Elite `045E:0B22` added.
+
+Evidence:
+
+- `work/ctl-test/layout_test.exe` — 22-row SDL DB matrix plus rewrite rules:
+  all pass.
+- Hidden desktop, existing Xbox profile, no pad attached (joysticks=0):
+  `controller: no gamepad enumerated (joysticks=0 gamepads=0); keeping existing
+  GCPadNew.ini`; device line unchanged; `work/hotfix/logs/A.log`.
+- Hidden desktop, fresh user dir, no pad: keyboard profile written,
+  `booted=1 fps=59.94`; `work/hotfix/logs/C.log`.
+- Shipped zip runner, existing Xbox profile, no pad: guard line, module loaded,
+  `booted=1 fps=59.94`; `work/hotfix/logs/D.log`.
+- Missing-device fallback is covered by the rewrite test only: no second
+  physical pad was attached during verification.
+
+Artifact (not published):
+
+```
+dist\WrestleManiaX8Recomp-v0.1.3-Windows-x64.zip   19,590,123 bytes
+SHA-256 5FA229610C331059C9D1CF2CF8A5414E32BD13EAE20160A996E00A4C90912DDE
+```
+
+### Memory card (shared pattern from Aggressive Inline)
+
+Applied: `Core/SlotA = 1` (raw), `Core/SlotB = 255` (None), forced in the
+runtime after `UICommon::CreateDirectories()` and re-forced from the launcher
+and runner into `Config/Dolphin.ini`; manifest carries both keys in
+`ensure`/`always`/`new`.
+
+Evidence (fresh user dir `work/mem/M1`, hidden desktop):
+`GC/USA`, `GC/EUR`, `GC/JAP` created; `GC/MemoryCardA.USA.raw` = 16,777,216
+bytes; `Config/Dolphin.ini` begins `[Core] SlotA = 1 / SlotB = 255`; no
+`GC/USA/Card A`. Card SHA-256 before/after five boots incl. an in-ring match:
+`8A2C41E9B230B61B98541049E3E01F2B2230CFEBCAEA413005AA05ADDEC0F98D` unchanged —
+**no game-written save was triggered** (this title writes System Data only from
+its own save flow; automation reached title → menu → match but never the save
+prompt). Save/load through the card is therefore still unproven.
+Launcher migration verified on a real install: it wrote both keys into the
+existing `%LOCALAPPDATA%\WrestleManiaX8Recomp\Config\Dolphin.ini`.
+
+Release notes: `docs/release/release-notes-v0.1.3.md`.
+
 ## Launcher parity (docs/15)
 
 `Launcher: shell ModernGekko-Template + WMX8 parity patch, theme WWE
@@ -464,8 +535,11 @@ Recorded exceptions:
 
 ## Next actions
 
-1. Test heavier scenes (Fatal 4 Way / Battle Royal, entrances) for dips. Only
+1. Publish v0.1.3 once the hub/user approves (no commit or push yet).
+2. Re-test with a physical Xbox pad, DualSense Edge and 8BitDo Pro 2 on this
+   machine: the pad-present branch (device found, profile reused) has no live
+   evidence yet; only the no-pad and unit-test paths do.
+3. Test heavier scenes (Fatal 4 Way / Battle Royal, entrances) for dips. Only
    then consider `-march`, loop budget/call depth and PGO.
-2. Playtest with the user's own controller via `tools\play.ps1`.
-3. Build a self-contained, WMX8-branded runner from a local template copy.
-4. Packaging (RecompLauncher) once play is stable.
+4. Playtest with the user's own controller via `tools\play.ps1`.
+5. Build a self-contained, WMX8-branded runner from a local template copy.

@@ -38,8 +38,8 @@ exact device name, so you do not need a pre-made profile. The layout presets
 cover:
 
 - Xbox Series, Xbox One, Xbox 360 and generic XInput pads
-- Xbox Elite Series 1 and 2 (Microsoft `045E:02E3`, `045E:0B00`,
-  `045E:0B05`) — standard Xbox layout; P1-P4 paddles are ignored
+- Xbox Elite Series 1 and 2 (Microsoft `045E:02E3`, `045E:0B00`, `045E:0B05`,
+  `045E:0B22`) — standard Xbox layout; P1-P4 paddles are ignored
 - DualSense, DualShock 4 and DualShock 3
 - DualSense Edge (Sony `054C:0DF2`) — standard DualSense layout; paddles,
   Fn and touchpad are ignored
@@ -66,6 +66,15 @@ Existing custom profiles are left alone until you do.
 The runner logs one line at startup:
 `controller: name="…" guid=… layout=… dpad=…`. If a pad is still wrong, send
 that line; it identifies the exact model and mode.
+
+Two more lines can appear when something is unusual:
+
+- `controller: no gamepad enumerated (joysticks=N gamepads=0); keeping existing
+  GCPadNew.ini` — no pad was visible when the game started (a wireless pad
+  still waking up, for example). The existing profile is kept as it is.
+- `controller: configured device "…" not found; using "…"` — the pad in the
+  profile is not connected, so the first pad that is connected was bound
+  instead.
 
 ## Save data
 

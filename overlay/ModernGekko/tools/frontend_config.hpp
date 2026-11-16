@@ -31,6 +31,25 @@ ControllerMapping DetectControllerMapping(std::string_view device,
                                           std::string_view sdl_guid = {});
 bool ControllerProfileIsDefault(std::string_view text, ControllerLayout layout);
 bool ControllerProfileDpadSwapped(std::string_view text);
+std::string ControllerProfileDevice(std::string_view text);
+ControllerLayout ControllerProfileLayout(std::string_view text);
+
+// Whether the on-disk profile must be regenerated for the detected device.
+// An empty `device` means the scan enumerated no pad (asleep wireless pad,
+// hotplug race): that always keeps the existing profile untouched.
+bool ControllerConfigNeedsRewrite(std::string_view existing,
+                                  std::string_view device,
+                                  ControllerMapping mapping,
+                                  ControllerLayout requested_layout);
+
+// Forces [Core] SlotA = 1 (raw memory card) and SlotB = 255 (None) in
+// <user>/Config/Dolphin.ini, creating the file or the section when missing.
+// Dolphin's default for SlotA is 8 (MemoryCardFolder), which needs
+// GC/<region>/Card A and hangs the slot-A probe when it is absent; SlotB = 0
+// is the Dummy EXI device and the game refuses it. Returns true when the file
+// changed.
+bool EnsureMemoryCardSlots(const std::filesystem::path &user_directory,
+                           bool *changed = nullptr);
 
 struct ResolutionOption {
   const char *text;

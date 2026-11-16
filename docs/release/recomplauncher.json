@@ -30,6 +30,29 @@
   },
   "config": [
     {
+      "id": "dolphin",
+      "format": "ini",
+      "file": [
+        {
+          "path": "{local}/WrestleManiaX8Recomp/Config/Dolphin.ini"
+        }
+      ],
+      "ensure": {
+        "Core/SlotA": "1",
+        "Core/SlotB": "255"
+      },
+      "always": {
+        "Core/SlotA": "1",
+        "Core/SlotB": "255"
+      },
+      "new": {
+        "Core/SlotA": "1",
+        "Core/SlotB": "255",
+        "Core/CPUCore": "1",
+        "Core/GFXBackend": "Vulkan"
+      }
+    },
+    {
       "id": "main",
       "format": "ini",
       "file": [

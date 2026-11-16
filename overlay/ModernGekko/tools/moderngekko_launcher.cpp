@@ -73,7 +73,7 @@ constexpr std::string_view CONTROLLER_PROFILE_NAME = "WiimoteNew.ini";
 #endif
 
 #ifndef WWE_RECOMP_VERSION
-#define WWE_RECOMP_VERSION "0.1.2"
+#define WWE_RECOMP_VERSION "0.1.3"
 #endif
 
 struct LauncherTheme
@@ -309,10 +309,21 @@ inline fs::path FolderCardPath(const fs::path& user_directory)
   return user_directory / "GC" / "USA" / "Card A";
 }
 
+// Slot A is a raw memory card (Core/SlotA = 1), so the game's save is this
+// file. The GCI folder above is only read when a savestate restores the old
+// folder device.
+inline fs::path RawCardPath(const fs::path& user_directory)
+{
+  return user_directory / "GC" / "MemoryCardA.USA.raw";
+}
+
 inline fs::path BackupFolderCard(const fs::path& user_directory)
 {
-  const fs::path card = FolderCardPath(user_directory);
-  if (!fs::is_directory(card))
+  const fs::path raw_card = RawCardPath(user_directory);
+  const fs::path folder_card = FolderCardPath(user_directory);
+  const bool have_raw = fs::is_regular_file(raw_card);
+  const bool have_folder = fs::is_directory(folder_card);
+  if (!have_raw && !have_folder)
     return {};
   const std::time_t now = std::time(nullptr);
   std::tm local{};
@@ -327,8 +338,12 @@ inline fs::path BackupFolderCard(const fs::path& user_directory)
       user_directory / "Backups" / (std::string("CardA-") + stamp);
   std::error_code ec;
   fs::create_directories(backup.parent_path(), ec);
-  fs::copy(card, backup,
-           fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
+  if (have_raw)
+    fs::copy_file(raw_card, backup / raw_card.filename(),
+                  fs::copy_options::overwrite_existing, ec);
+  if (have_folder)
+    fs::copy(folder_card, backup / "Card A",
+             fs::copy_options::recursive | fs::copy_options::overwrite_existing, ec);
   return ec ? fs::path{} : backup;
 }
 
@@ -890,6 +905,21 @@ int main(int argc, char** argv)
 
   const fs::path user_directory = DefaultUserDirectory();
   const fs::path release_directory = ExecutableDirectory(argv[0]);
+  // Slot A must be a raw memory card and slot B empty before the game boots;
+  // Dolphin's default (GCI folder) needs GC/<region>/Card A and can hang the
+  // slot-A probe. The runner enforces the same keys again before Runtime::Create.
+  {
+    bool memcard_changed = false;
+    if (moderngekko::frontend::EnsureMemoryCardSlots(user_directory, &memcard_changed))
+    {
+      if (memcard_changed)
+        std::cerr << "memory card: set SlotA=1 (raw card), SlotB=255 (None)\n";
+    }
+    else
+    {
+      std::cerr << "memory card: could not write Config/Dolphin.ini\n";
+    }
+  }
   if (extract_only)
   {
     ExtractionState extraction;
@@ -1895,29 +1925,32 @@ int main(int argc, char** argv)
 
       ImGui::Spacing();
       begin_card("##card_card", "MEMORY CARD", 300);
-      const fs::path card_path = FolderCardPath(user_directory);
-      ImGui::TextDisabled("Folder card");
+      const fs::path card_path = RawCardPath(user_directory);
+      std::error_code card_size_error;
+      const auto card_size = fs::file_size(card_path, card_size_error);
+      ImGui::TextDisabled("Slot A raw card");
       ImGui::TextWrapped("%s", card_path.string().c_str());
-      if (ImGui::Button("Create card", ImVec2(-1, 30 * S)))
-      {
-        std::error_code card_error;
-        fs::create_directories(card_path, card_error);
-        card_status = card_error ? "Create failed: " + card_error.message() : "Card ready";
-      }
+      ImGui::TextDisabled("%s",
+                          card_size_error ? "not created yet (the game formats it on first boot)"
+                                          : (std::to_string(card_size / (1024 * 1024)) +
+                                             " MB, created by the game on first boot")
+                                                .c_str());
       if (ImGui::Button("Back up card", ImVec2(-1, 30 * S)))
       {
         const fs::path backup = BackupFolderCard(user_directory);
-        card_status = backup.empty() ? "Backup failed (no card?)" : "Backup: " + backup.string();
+        card_status = backup.empty() ? "Backup failed (no card yet)"
+                                     : "Backup: " + backup.string();
       }
+      ImGui::BeginDisabled(true);
       if (ImGui::Button("Import .gci", ImVec2(-1, 30 * S)))
       {
-        static constexpr SDL_DialogFileFilter gci_filters[] = {{"GCI saves", "gci"}};
-        const std::string documents = DocumentsDirectory().string();
-        SDL_ShowOpenFileDialog(FileDialogCallback, &gci_dialog, window, gci_filters, 1,
-                               documents.c_str(), false);
       }
+      ImGui::EndDisabled();
+      if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+        ImGui::SetTooltip("Slot A is a raw card now; importing a single .gci needs a "
+                          "folder card. Copy MemoryCardA.USA.raw instead.");
       if (ImGui::Button("Open card folder", ImVec2(-1, 30 * S)))
-        OpenFolder(card_path);
+        OpenFolder(card_path.parent_path());
       ImGui::TextDisabled("%s", card_status.c_str());
       end_card();
 
