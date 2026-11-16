@@ -467,8 +467,9 @@ Evidence:
 Artifact (not published):
 
 ```
-dist\WrestleManiaX8Recomp-v0.1.3-Windows-x64.zip   19,590,123 bytes
-SHA-256 5FA229610C331059C9D1CF2CF8A5414E32BD13EAE20160A996E00A4C90912DDE
+dist\WrestleManiaX8Recomp-v0.1.3-Windows-x64.zip   19,590,673 bytes
+SHA-256 6A9BD66A5E05CD2FCC850A3C3E0CB99EB966909FA123C94D973396E5C9F0D646
+Release https://github.com/Spaced1127/WWE-WrestleMania-X8-Recomp/releases/tag/v0.1.3
 ```
 
 ### Memory card (shared pattern from Aggressive Inline)
