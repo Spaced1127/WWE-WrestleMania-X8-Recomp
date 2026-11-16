@@ -72,7 +72,8 @@ at "checking memory card in slot A".
   `GC/MemoryCardA.USA.raw`. "Import .gci" is disabled with an explanation:
   single-file import needs the folder device, which is no longer used.
 
-Verified on a hidden desktop with a fresh user dir: `GC/USA`, `GC/EUR`,
+Verified on a fresh user dir (runs at the time used a separate desktop; test
+runs are visible windows from now on): `GC/USA`, `GC/EUR`,
 `GC/JAP` and the rest of the Dolphin tree are created, `GC/MemoryCardA.USA.raw`
 appears at 16,777,216 bytes, `Config/Dolphin.ini` starts with
 `[Core] SlotA = 1 / SlotB = 255`, and no `GC/USA/Card A` folder is created.
@@ -99,3 +100,32 @@ not be used for card testing.
   untouched (mtime unchanged), guard line logged.
 - Hidden-desktop run, fresh user dir, no pad: keyboard profile written, module
   loaded, `booted=1 fps=59.94`.
+
+## If a controller is still wrong
+
+Start the game once and send us the startup line from the log
+(`Logs\WrestleManiaX8.log`):
+
+`controller: name="..." guid=... layout=... dpad=...`
+
+That line names the exact model, mode and layout that was chosen, so a report
+turns into a fix. Two extra lines may appear and are also useful:
+`no gamepad enumerated (...)` and `configured device "..." not found`.
+
+## Verification status (honest)
+
+- Controllers: verified offline against the real SDL controller DB (Xbox 360,
+  Xbox One, One S, Series X, Elite S1/S2, DualSense, DualSense Edge, 8BitDo
+  Pro 2 both modes, Ultimate, 64, Micro, Switch Pro) plus one live report of a
+  standard Xbox pad. No physical Xbox pad, Edge or 8BitDo was attached to the
+  build machine during this release - if yours misbehaves, the startup line
+  above is what we need.
+- Memory card: fresh-install creation of `GC/<region>` and
+  `GC/MemoryCardA.USA.raw` (16,777,216 bytes) verified, and a clean shutdown
+  flushes the card. A save written by the game itself was not captured before
+  release; the save/load prompt needs a manual menu save.
+- Boot: shipped artifact holds 59.94 fps and stops cleanly.
+
+## SHA-256
+
+See `WrestleManiaX8Recomp-v0.1.3-SHA256SUMS.txt` attached to this release.
