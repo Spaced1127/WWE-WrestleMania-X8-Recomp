@@ -482,13 +482,25 @@ and runner into `Config/Dolphin.ini`; manifest carries both keys in
 Evidence (fresh user dir `work/mem/M1`, hidden desktop):
 `GC/USA`, `GC/EUR`, `GC/JAP` created; `GC/MemoryCardA.USA.raw` = 16,777,216
 bytes; `Config/Dolphin.ini` begins `[Core] SlotA = 1 / SlotB = 255`; no
-`GC/USA/Card A`. Card SHA-256 before/after five boots incl. an in-ring match:
-`8A2C41E9B230B61B98541049E3E01F2B2230CFEBCAEA413005AA05ADDEC0F98D` unchanged —
-**no game-written save was triggered** (this title writes System Data only from
-its own save flow; automation reached title → menu → match but never the save
-prompt). Save/load through the card is therefore still unproven.
-Launcher migration verified on a real install: it wrote both keys into the
-existing `%LOCALAPPDATA%\WrestleManiaX8Recomp\Config\Dolphin.ini`.
+`GC/USA/Card A`.
+
+Save and load (visible run, user dir `work/mem/S3`, shipped v0.1.3 build):
+
+| Step | Evidence |
+|---|---|
+| Empty formatted card | SHA-256 `8A2C41E9…C0F98D`, BAT 2043 free / last 4 |
+| Game prompt | "Do you want to create System Data?", YES + A |
+| Save written | SHA-256 `A1A47B2E6578D70E0ACC946E8214C2464030C2A83CAAED9DAA41EA2FCB3EB4FE`, entry `[000] GW3E-78 "/w_mania2002" blocks=14 first=5`, BAT 2029 free / last 18 / counter 1 |
+| Clean stop | SHA unchanged after `command=stop` (flush) |
+| Reload | next boot reports "Load complete." instead of the create prompt |
+
+A freshly formatted card lives in RAM and only reaches disk on the first write
+or a clean shutdown, so a force-kill leaves no card file; always stop with
+`command=stop`. `tools/memcard_check.py` reads both BAT blocks and reports the
+newer one.
+
+Launcher-migration evidence: the launcher wrote both keys into the existing
+`%LOCALAPPDATA%\WrestleManiaX8Recomp\Config\Dolphin.ini`.
 
 Release notes: `docs/release/release-notes-v0.1.3.md`.
 

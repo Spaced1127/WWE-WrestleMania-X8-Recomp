@@ -29,6 +29,7 @@ CARD_SIZE = 16 * 1024 * 1024
 OFFSET_DIRECTORY = BLOCK_SIZE * 1
 OFFSET_DIRECTORY_BACKUP = BLOCK_SIZE * 2
 OFFSET_BAT = BLOCK_SIZE * 3
+OFFSET_BAT_BACKUP = BLOCK_SIZE * 4
 
 # Directory: 127 * 0x40 entries, 0x3a padding, 2-byte update counter, then the
 # additive checksum and its inverse (0x1ffc / 0x1ffe).
@@ -120,12 +121,21 @@ def inspect(path: Path) -> dict:
 
     directory = data[OFFSET_DIRECTORY:OFFSET_DIRECTORY + BLOCK_SIZE]
     backup = data[OFFSET_DIRECTORY_BACKUP:OFFSET_DIRECTORY_BACKUP + BLOCK_SIZE]
-    bat = data[OFFSET_BAT:OFFSET_BAT + BLOCK_SIZE]
+    bat_primary = parse_bat(data[OFFSET_BAT:OFFSET_BAT + BLOCK_SIZE])
+    bat_backup = parse_bat(data[OFFSET_BAT_BACKUP:OFFSET_BAT_BACKUP + BLOCK_SIZE])
 
     report["entries"] = parse_directory(directory)
     report["entries_backup"] = parse_directory(backup)
     report["directory_checksum_ok"] = checksum_ok(directory)
-    report["bat"] = parse_bat(bat)
+    # Dolphin alternates the two BAT blocks; the higher update counter is the
+    # live one.
+    report["bat_primary"] = bat_primary
+    report["bat_backup"] = bat_backup
+    report["bat"] = (
+        bat_primary
+        if bat_primary["update_counter"] >= bat_backup["update_counter"]
+        else bat_backup
+    )
     report["usable"] = report["directory_checksum_ok"] and bool(report["bat"])
     if not report["directory_checksum_ok"]:
         report["error"] = "directory checksum mismatch"

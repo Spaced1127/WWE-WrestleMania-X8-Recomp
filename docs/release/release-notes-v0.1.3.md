@@ -72,16 +72,20 @@ at "checking memory card in slot A".
   `GC/MemoryCardA.USA.raw`. "Import .gci" is disabled with an explanation:
   single-file import needs the folder device, which is no longer used.
 
-Verified on a fresh user dir (runs at the time used a separate desktop; test
-runs are visible windows from now on): `GC/USA`, `GC/EUR`,
+Verified on a fresh user dir: `GC/USA`, `GC/EUR`,
 `GC/JAP` and the rest of the Dolphin tree are created, `GC/MemoryCardA.USA.raw`
 appears at 16,777,216 bytes, `Config/Dolphin.ini` starts with
 `[Core] SlotA = 1 / SlotB = 255`, and no `GC/USA/Card A` folder is created.
-Not verified: a save written by the game. The card file hash is unchanged after
-five automated boots through title, menu and an in-ring match, because this
-title only writes System Data from its own save flow, which the automation did
-not reach. Savestates from the folder era re-enable the folder device and must
-not be used for card testing.
+
+Save and load were then verified on the shipped build: answering YES to the
+game's "Do you want to create System Data?" wrote the card
+(SHA-256 `8A2C41E9…` formatted-empty to `A1A47B2E6578D70E0ACC946E8214C2464030C2A83CAAED9DAA41EA2FCB3EB4FE`),
+directory entry `GW3E-78 "/w_mania2002"` with 14 blocks at block 5, block
+allocation updated from 2043 free / last 4 to 2029 free / last 18. A clean
+shutdown (`command=stop`, which flushes the card) left the hash unchanged, and
+the next boot reported **"Load complete."** instead of asking to create data.
+Savestates from the folder era re-enable the folder device and must not be used
+for card testing.
 
 ## Other
 
@@ -96,10 +100,15 @@ not be used for card testing.
 ## Verification
 
 - `work/ctl-test/layout_test.exe`: all layout, D-pad and rewrite cases pass.
-- Hidden-desktop run with an existing Xbox profile and no pad attached: profile
-  untouched (mtime unchanged), guard line logged.
-- Hidden-desktop run, fresh user dir, no pad: keyboard profile written, module
-  loaded, `booted=1 fps=59.94`.
+- Live pads on the shipped build: Xbox One Controller
+  (`guid=0300fa675e040000ff02000000007801`) → `layout=standard dpad=normal`,
+  existing profile reused; DualSense Wireless Controller
+  (`guid=030057564c050000e60c000000016800`) → `layout=standard dpad=normal`
+  (the D-pad mirroring bug would have shown `dpad=swapped`).
+- Run with an existing Xbox profile and no pad attached: profile untouched, the
+  no-gamepad guard logged instead of a keyboard rewrite.
+- Fresh user dir, no pad: keyboard profile written, module loaded,
+  `booted=1 fps=59.94`.
 
 ## If a controller is still wrong
 
@@ -116,14 +125,16 @@ turns into a fix. Two extra lines may appear and are also useful:
 
 - Controllers: verified offline against the real SDL controller DB (Xbox 360,
   Xbox One, One S, Series X, Elite S1/S2, DualSense, DualSense Edge, 8BitDo
-  Pro 2 both modes, Ultimate, 64, Micro, Switch Pro) plus one live report of a
-  standard Xbox pad. No physical Xbox pad, Edge or 8BitDo was attached to the
-  build machine during this release - if yours misbehaves, the startup line
-  above is what we need.
+  Pro 2 both modes, Ultimate, 64, Micro, Switch Pro) and live on this build
+  with a physical Xbox One Controller and a DualSense, both detected as
+  `layout=standard dpad=normal`. Physical button presses on your own pad are
+  still yours to confirm - if something is off, the startup line above is what
+  we need.
 - Memory card: fresh-install creation of `GC/<region>` and
-  `GC/MemoryCardA.USA.raw` (16,777,216 bytes) verified, and a clean shutdown
-  flushes the card. A save written by the game itself was not captured before
-  release; the save/load prompt needs a manual menu save.
+  `GC/MemoryCardA.USA.raw` (16,777,216 bytes), a game-written save
+  (`GW3E-78`, 14 blocks, card SHA before/after), a flush-safe clean shutdown,
+  and a reload that reports "Load complete." are all verified on the shipped
+  build.
 - Boot: shipped artifact holds 59.94 fps and stops cleanly.
 
 ## SHA-256
