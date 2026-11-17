@@ -73,7 +73,7 @@ constexpr std::string_view CONTROLLER_PROFILE_NAME = "WiimoteNew.ini";
 #endif
 
 #ifndef WWE_RECOMP_VERSION
-#define WWE_RECOMP_VERSION "0.1.3"
+#define WWE_RECOMP_VERSION "0.1.4"
 #endif
 
 struct LauncherTheme
@@ -377,25 +377,22 @@ struct ControllerOption
   std::string mapping;
 };
 
-constexpr moderngekko::frontend::ControllerLayout kControllerLayouts[] = {
-    moderngekko::frontend::ControllerLayout::Auto,
-    moderngekko::frontend::ControllerLayout::Standard,
-    moderngekko::frontend::ControllerLayout::Nintendo,
-    moderngekko::frontend::ControllerLayout::Keyboard,
+constexpr moderngekko::frontend::ControllerClass kControllerLayouts[] = {
+    moderngekko::frontend::ControllerClass::Auto,
+    moderngekko::frontend::ControllerClass::Positional,
+    moderngekko::frontend::ControllerClass::Nintendo,
 };
 
 constexpr const char* kControllerLayoutLabels[] = {
-    "Auto-detect (recommended)",
-    "Xbox / PlayStation (standard)",
+    "Auto (per pad type)",
+    "Positional (Xbox / PlayStation)",
     "Nintendo (A/B swap)",
-    "Keyboard (WASD)",
 };
 
 constexpr const char* kControllerLayoutShortLabels[] = {
     "Auto",
-    "Xbox / PlayStation",
-    "Nintendo (A/B swap)",
-    "Keyboard",
+    "Positional",
+    "Nintendo",
 };
 
 constexpr int kControllerLayoutCount =
@@ -447,17 +444,8 @@ std::vector<ControllerOption> EnumerateControllers()
     char guid_text[33]{};
     SDL_GUIDToString(guid, guid_text, static_cast<int>(sizeof(guid_text)));
     option.guid = guid_text;
-    char* mapping_value = SDL_GetGamepadMappingForID(joystick_id);
-    option.mapping = mapping_value ? mapping_value : "";
-    SDL_free(mapping_value);
     std::cerr << "controller: name=\"" << name << "\" guid=" << option.guid
-              << " layout="
-              << moderngekko::frontend::ControllerLayoutName(
-                     moderngekko::frontend::DetectControllerMapping(option.device,
-                                                                    option.mapping,
-                                                                    option.guid)
-                         .layout)
-              << '\n';
+              << " class=auto\n";
     result.emplace_back(std::move(option));
   }
   SDL_free(joystick_ids);
@@ -1243,48 +1231,25 @@ int main(int argc, char** argv)
   int layout_index = 0;
   for (int i = 0; i < kControllerLayoutCount; ++i)
   {
-    if (config.controller_layout ==
-        moderngekko::frontend::ControllerLayoutName(kControllerLayouts[i]))
+    if (config.controller_class ==
+        moderngekko::frontend::ControllerClassName(kControllerLayouts[i]))
       layout_index = i;
   }
   const auto select_controller = [&](int index)
   {
-    const moderngekko::frontend::ControllerLayout selected_layout =
-        kControllerLayouts[layout_index];
-    moderngekko::frontend::ControllerLayout layout = selected_layout;
+    using moderngekko::frontend::ControllerClass;
+    const ControllerClass selected_class = kControllerLayouts[layout_index];
     std::string device = controllers[index].device;
-    moderngekko::frontend::ControllerMapping mapping =
-        moderngekko::frontend::DetectControllerMapping(device, controllers[index].mapping,
-                                                       controllers[index].guid);
-    if (selected_layout == moderngekko::frontend::ControllerLayout::Keyboard ||
-        device == KEYBOARD_DEVICE)
-    {
-      layout = moderngekko::frontend::ControllerLayout::Keyboard;
+    if (device == KEYBOARD_DEVICE)
       device = std::string(KEYBOARD_DEVICE);
-      mapping = {moderngekko::frontend::ControllerLayout::Keyboard, false};
-      for (int i = 0; i < kControllerLayoutCount; ++i)
-      {
-        if (kControllerLayouts[i] == moderngekko::frontend::ControllerLayout::Keyboard)
-          layout_index = i;
-      }
-    }
-    else if (selected_layout != moderngekko::frontend::ControllerLayout::Auto)
-    {
-      mapping.layout = selected_layout;
-      layout = selected_layout;
-    }
-    else
-    {
-      layout = mapping.layout;
-    }
-    if (mapping.layout == moderngekko::frontend::ControllerLayout::Keyboard)
-    {
-      mapping.swap_dpad_lr = false;
-      device = std::string(KEYBOARD_DEVICE);
-    }
 
     std::string message;
-    if (!moderngekko::frontend::GenerateControllerConfig(user_directory, device, mapping,
+    // Rewriting is an explicit user action here; the runner never regenerates.
+    const std::filesystem::path profile_path =
+        user_directory / "Config" / std::string(CONTROLLER_PROFILE_NAME);
+    std::error_code remove_error;
+    std::filesystem::remove(profile_path, remove_error);
+    if (!moderngekko::frontend::EnsureCanonicalPadProfile(user_directory, device,
                                                          &message))
     {
       std::lock_guard lock(dialog.mutex);
@@ -1298,10 +1263,8 @@ int main(int argc, char** argv)
     config.controllers = configured_controllers;
     config.resolution = resolutions[resolution_index].text;
     config.show_fps_in_title = show_fps_in_title;
-    config.controller_layout = moderngekko::frontend::ControllerLayoutName(
-        layout == moderngekko::frontend::ControllerLayout::Keyboard
-            ? moderngekko::frontend::ControllerLayout::Keyboard
-            : selected_layout);
+    config.controller_class =
+        moderngekko::frontend::ControllerClassName(selected_class);
     if (!save_config())
       return false;
     controller_profile_exists = true;
@@ -1366,8 +1329,8 @@ int main(int argc, char** argv)
       config.controllers = configured_controllers;
     else if (!selected_controller.empty())
       config.controllers = {selected_controller};
-    config.controller_layout =
-        moderngekko::frontend::ControllerLayoutName(kControllerLayouts[layout_index]);
+    config.controller_class =
+        moderngekko::frontend::ControllerClassName(kControllerLayouts[layout_index]);
   };
   const auto save_netplay = [&]() -> bool
   {
@@ -2286,26 +2249,10 @@ int main(int argc, char** argv)
           {
             controller_index = static_cast<int>(i);
             selected_controller = controllers[i].device;
-            if (selected_controller == KEYBOARD_DEVICE)
-            {
-              for (int j = 0; j < kControllerLayoutCount; ++j)
-              {
-                if (kControllerLayouts[j] ==
-                    moderngekko::frontend::ControllerLayout::Keyboard)
-                  layout_index = j;
-              }
-              config.controller_layout = "keyboard";
-            }
-            else if (kControllerLayouts[layout_index] ==
-                     moderngekko::frontend::ControllerLayout::Keyboard)
-            {
-              layout_index = 0;
-              config.controller_layout = "auto";
-            }
             controller_status = controller_profile_exists
                                     ? "Existing " + std::string(CONTROLLER_PROFILE_NAME) +
                                           " unchanged"
-                                    : "Ready to generate controller profile";
+                                    : "Ready to write the canonical profile";
           }
           if (selected)
             ImGui::SetItemDefaultFocus();
@@ -2325,13 +2272,13 @@ int main(int argc, char** argv)
           {
             const int previous = layout_index;
             layout_index = i;
-            config.controller_layout =
-                moderngekko::frontend::ControllerLayoutName(kControllerLayouts[i]);
+            config.controller_class =
+                moderngekko::frontend::ControllerClassName(kControllerLayouts[i]);
             if (!save_config())
             {
               layout_index = previous;
-              config.controller_layout =
-                  moderngekko::frontend::ControllerLayoutName(kControllerLayouts[previous]);
+              config.controller_class =
+                  moderngekko::frontend::ControllerClassName(kControllerLayouts[previous]);
             }
             else
             {
@@ -2348,32 +2295,13 @@ int main(int argc, char** argv)
         ImGui::EndCombo();
       }
 
-      moderngekko::frontend::ControllerLayout preview_layout =
+      const moderngekko::frontend::ControllerClass preview_class =
           kControllerLayouts[layout_index];
-      if (preview_layout == moderngekko::frontend::ControllerLayout::Auto)
-      {
-        const std::string mapping_text =
-            controller_index >= 0 &&
-                    static_cast<std::size_t>(controller_index) < controllers.size()
-                ? controllers[controller_index].mapping
-                : std::string{};
-        const std::string guid_text =
-            controller_index >= 0 &&
-                    static_cast<std::size_t>(controller_index) < controllers.size()
-                ? controllers[controller_index].guid
-                : std::string{};
-        const moderngekko::frontend::ControllerMapping detected =
-            moderngekko::frontend::DetectControllerMapping(selected_controller,
-                                                           mapping_text, guid_text);
-        preview_layout = selected_controller.empty()
-                             ? moderngekko::frontend::ControllerLayout::Standard
-                             : detected.layout;
-        if (!selected_controller.empty())
-          ImGui::TextDisabled(
-              "Detected: %s%s",
-              kControllerLayoutShortLabels[static_cast<int>(preview_layout)],
-              detected.swap_dpad_lr ? " (D-pad L/R corrected)" : "");
-      }
+      if (preview_class == moderngekko::frontend::ControllerClass::Auto)
+        ImGui::TextDisabled("Class: Auto - each pad decides from its SDL type");
+      else
+        ImGui::TextDisabled("Class: %s (forced)",
+                            kControllerLayoutShortLabels[layout_index]);
 
       ImGui::BeginDisabled(controller_index < 0);
       if (ImGui::Button("Use this controller", ImVec2(-1, 34 * S)))
@@ -2382,23 +2310,14 @@ int main(int argc, char** argv)
       ImGui::TextDisabled("%s", controller_status.c_str());
       ImGui::Separator();
       ImGui::TextDisabled("Mapping");
-      if (preview_layout == moderngekko::frontend::ControllerLayout::Keyboard)
-      {
-        ImGui::TextWrapped("Enter = A, Backspace = B, X = X, Y = Y, Left Shift = Z, "
-                           "Space = Start. WASD = main stick, IJKL = C-stick, "
-                           "Q/E = L/R, arrow keys = D-pad.");
-      }
-      else if (preview_layout == moderngekko::frontend::ControllerLayout::Nintendo)
-      {
-        ImGui::TextWrapped("B = A, A = B, Y = X, X = Y, R = Z, + = Start. "
-                           "D-pad = menu; L + D-pad = taunt.");
-      }
-      else
-      {
-        ImGui::TextWrapped("A/Cross = A, B/Circle = B, X/Square = X, Y/Triangle = Y, "
-                           "RB/R1 = Z, Start/Options = Start. D-pad = menu; "
-                           "LB/L1 + D-pad = taunt.");
-      }
+      ImGui::TextWrapped("One static profile holds the positional bindings. A/B and "
+                         "X/Y are swapped in the input layer for Nintendo-class pads, "
+                         "so nothing is regenerated at launch. D-pad, sticks and "
+                         "triggers are never swapped.");
+      if (selected_controller == KEYBOARD_DEVICE)
+        ImGui::TextWrapped("Keyboard: Enter = A, Backspace = B, X/Y = X/Y, Left Shift "
+                           "= Z, Space = Start, WASD = main stick, IJKL = C-stick, "
+                           "Q/E = L/R, arrows = D-pad.");
       ImGui::TextDisabled("Profile: %s",
                           (user_directory / "Config" /
                            std::string(CONTROLLER_PROFILE_NAME)).string().c_str());

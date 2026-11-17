@@ -8,46 +8,32 @@
 #include <vector>
 
 namespace moderngekko::frontend {
-enum class ControllerLayout {
+// Canonical controller system (reference implementation).
+//
+// ONE static GCPadNew.ini holds the SDL positional bindings and is never
+// rewritten at launch. Which physical button is "A" is decided in the runtime
+// input layer from the SDL gamepad type (see ciface::SDL::LayoutClass), with a
+// user override from config.ini (`controller_class = auto|positional|nintendo`).
+enum class ControllerClass {
   Auto,
-  Standard,
+  Positional,
   Nintendo,
-  Keyboard,
 };
 
-const char *ControllerLayoutName(ControllerLayout layout);
-ControllerLayout DetectControllerLayout(std::string_view device);
+const char *ControllerClassName(ControllerClass controller_class);
+bool ParseControllerClass(std::string_view text, ControllerClass *out);
 
-// A controller's button family plus any D-pad left/right correction needed by
-// its SDL mapping. DetectControllerMapping parses the live SDL mapping string,
-// so 8BitDo Switch-mode and XInput-mode pads are handled per GUID/report, not
-// by a name guess.
-struct ControllerMapping {
-  ControllerLayout layout = ControllerLayout::Standard;
-  bool swap_dpad_lr = false;
-};
-ControllerMapping DetectControllerMapping(std::string_view device,
-                                          std::string_view sdl_mapping = {},
-                                          std::string_view sdl_guid = {});
-bool ControllerProfileIsDefault(std::string_view text, ControllerLayout layout);
-bool ControllerProfileDpadSwapped(std::string_view text);
-std::string ControllerProfileDevice(std::string_view text);
-ControllerLayout ControllerProfileLayout(std::string_view text);
+// The one canonical profile text (SDL positional mapping).
+std::string CanonicalPadProfile(std::string_view device);
 
-// Whether the on-disk profile must be regenerated for the detected device.
-// An empty `device` means the scan enumerated no pad (asleep wireless pad,
-// hotplug race): that always keeps the existing profile untouched.
-bool ControllerConfigNeedsRewrite(std::string_view existing,
-                                  std::string_view device,
-                                  ControllerMapping mapping,
-                                  ControllerLayout requested_layout);
+// Writes the canonical profile only when it does not exist yet (first run).
+// Never called on a launch that already has a profile.
+bool EnsureCanonicalPadProfile(const std::filesystem::path &user_directory,
+                               std::string_view device, std::string *message);
+bool ControllerConfigExists(const std::filesystem::path &user_directory);
 
 // Forces [Core] SlotA = 1 (raw memory card) and SlotB = 255 (None) in
 // <user>/Config/Dolphin.ini, creating the file or the section when missing.
-// Dolphin's default for SlotA is 8 (MemoryCardFolder), which needs
-// GC/<region>/Card A and hangs the slot-A probe when it is absent; SlotB = 0
-// is the Dummy EXI device and the game refuses it. Returns true when the file
-// changed.
 bool EnsureMemoryCardSlots(const std::filesystem::path &user_directory,
                            bool *changed = nullptr);
 
@@ -67,7 +53,7 @@ struct ConfigResult {
   std::string graphics_backend = "Vulkan";
   std::string controller;
   std::vector<std::string> controllers;
-  std::string controller_layout = "auto";
+  std::string controller_class = "auto";
   bool show_fps_in_title = true;
   bool fullscreen = false;
   int msaa = 1;
@@ -107,27 +93,4 @@ ReadConfiguredController(const std::filesystem::path &user_directory);
 std::vector<std::string>
 ReadConfiguredControllers(const std::filesystem::path &user_directory);
 bool ControllerConfigExists(const std::filesystem::path &user_directory);
-bool GenerateControllerConfig(const std::filesystem::path &user_directory,
-                              std::span<const std::string> controllers,
-                              std::string *message);
-bool GenerateControllerConfig(const std::filesystem::path &user_directory,
-                              std::span<const std::string> controllers,
-                              ControllerLayout layout, std::string *message);
-bool GenerateControllerConfig(const std::filesystem::path &user_directory,
-                              std::span<const std::string> controllers,
-                              ControllerMapping mapping, std::string *message);
-bool GenerateControllerConfig(const std::filesystem::path &user_directory,
-                              std::string_view controller,
-                              std::string *message);
-bool GenerateControllerConfig(const std::filesystem::path &user_directory,
-                              std::string_view controller,
-                              ControllerLayout layout, std::string *message);
-bool GenerateControllerConfig(const std::filesystem::path &user_directory,
-                              std::string_view controller,
-                              ControllerMapping mapping, std::string *message);
-bool EnsureControllerConfig(const std::filesystem::path &user_directory,
-                            std::span<const std::string> controllers,
-                            std::string *message);
-bool EnsureControllerConfig(const std::filesystem::path &user_directory,
-                            std::string_view controller, std::string *message);
 } // namespace moderngekko::frontend

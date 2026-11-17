@@ -22,6 +22,11 @@
 #include "Core/System.h"
 #include "DolphinNoGUI/Platform.h"
 #include "InputCommon/ControllerInterface/Touch/InputOverrider.h"
+#include "InputCommon/ControllerInterface/ControllerInterface.h"
+#include "InputCommon/ControllerInterface/SDL/LayoutClass.h"
+#include "InputCommon/ControllerEmu/ControllerEmu.h"
+#include "InputCommon/InputConfig.h"
+#include "Core/HW/GCPad.h"
 #include "UICommon/UICommon.h"
 #include "VideoCommon/FrameDumper.h"
 #include "VideoCommon/PerformanceMetrics.h"
@@ -169,6 +174,27 @@ struct RuntimeAutomationState
   std::string last_command;
   std::string last_error;
 };
+
+// Resolves the GameCube pad device without touching GCPadNew.ini: if the
+// configured device is absent, the first enumerated pad becomes the emulated
+// controller's default device. A pad that appears later (hot-plug) resolves
+// through the same call, so no profile is ever rewritten at launch.
+void EnsurePadBound()
+{
+  InputConfig* config = Pad::GetConfig();
+  if (!config || config->GetControllerCount() <= 0)
+    return;
+  ControllerEmu::EmulatedController* pad = config->GetController(0);
+  if (!pad || pad->IsDefaultDeviceConnected())
+    return;
+  const std::string device = g_controller_interface.GetDefaultDeviceString();
+  if (device.empty())
+    return;
+  pad->SetDefaultDevice(device);
+  pad->UpdateReferences(g_controller_interface);
+  std::fprintf(stderr, "controller: configured device missing; bound \"%s\"\n",
+               device.c_str());
+}
 
 void EnsureAutomationDirectories(const std::filesystem::path& root)
 {
@@ -673,6 +699,15 @@ RuntimeCreateResult Runtime::Create(RuntimeConfig config) {
   const WindowSystemInfo wsi = impl->platform->GetWindowSystemInfo();
   UICommon::InitControllers(wsi);
   impl->controllers_initialized = true;
+  // Layout class: the host app's controller_class (auto/positional/nintendo)
+  // is applied once, in the input layer, before any pad is read.
+  if (impl->config.controller_class == "nintendo")
+    ciface::SDL::SetLayoutClassOverride(1);
+  else if (impl->config.controller_class == "positional")
+    ciface::SDL::SetLayoutClassOverride(0);
+  else
+    ciface::SDL::SetLayoutClassOverride(-1);
+  EnsurePadBound();
   EnsureAutomationDirectories(impl->config.automation.directory);
   if (!impl->config.automation.directory.empty()) {
     for (int port = 0; port < 4; ++port)
@@ -878,6 +913,16 @@ RuntimeRunResult Runtime::Run() {
         });
   }
   std::jthread title_thread;
+  // Hot-plug: a pad that appears after launch is bound by the same helper the
+  // startup path uses. No profile write, no restart.
+  std::jthread pad_watch_thread([](std::stop_token stop_token) {
+    while (!stop_token.stop_requested())
+    {
+      for (int i = 0; i < 20 && !stop_token.stop_requested(); ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      EnsurePadBound();
+    }
+  });
   if (!m_impl->config.headless && m_impl->config.show_fps_in_title) {
     title_thread = std::jthread([](std::stop_token stop_token) {
       while (!stop_token.stop_requested()) {
@@ -888,6 +933,9 @@ RuntimeRunResult Runtime::Run() {
     });
   }
   m_impl->platform->MainLoop();
+  pad_watch_thread.request_stop();
+  if (pad_watch_thread.joinable())
+    pad_watch_thread.join();
   title_thread.request_stop();
   if (title_thread.joinable())
     title_thread.join();

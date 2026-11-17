@@ -9,6 +9,7 @@
 
 #include <SDL3/SDL.h>
 
+
 #include <charconv>
 #include <chrono>
 #include <csignal>
@@ -64,17 +65,6 @@ std::string ReadTextFile(const std::filesystem::path &path) {
 struct ControllerDevice {
   std::string device;
   std::string guid;
-  std::string mapping;
-};
-
-struct ControllerScan {
-  ControllerDevice first;
-  ControllerDevice match;
-  int joysticks = 0;
-  int gamepads = 0;
-  bool found(std::string_view preferred) const {
-    return !match.device.empty() && match.device == preferred;
-  }
 };
 
 // Dolphin's SDL input backend (ControllerInterface/SDL/SDL.cpp) applies these
@@ -90,15 +80,19 @@ void ApplyRuntimeSdlHints() {
   SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_VERTICAL_JOY_CONS, "0");
 }
 
-ControllerScan ScanControllers(std::string_view preferred) {
+// Picks the configured pad when it is present, otherwise the first enumerated
+// one. Nothing is written to disk here; the runtime binds the same pad through
+// the emulated controller's default device, including after a hot-plug.
+ControllerDevice ChooseControllerDevice(std::string_view preferred) {
   constexpr std::string_view keyboard = "DInput/0/Keyboard Mouse";
-  ControllerScan scan;
+  ControllerDevice scan;
   if (preferred == keyboard)
     return scan;
 
   int count = 0;
   SDL_JoystickID *ids = SDL_GetJoysticks(&count);
-  scan.joysticks = ids ? count : 0;
+  ControllerDevice first;
+  ControllerDevice match;
   if (ids) {
     for (int i = 0; i < count; ++i) {
       if (!SDL_IsGamepad(ids[i]))
@@ -106,122 +100,64 @@ ControllerScan ScanControllers(std::string_view preferred) {
       const char *name = SDL_GetGamepadNameForID(ids[i]);
       if (!name || !*name)
         continue;
-      ++scan.gamepads;
       ControllerDevice candidate;
       candidate.device = "SDL/0/" + std::string(name);
       const SDL_GUID guid = SDL_GetGamepadGUIDForID(ids[i]);
       char guid_text[33]{};
       SDL_GUIDToString(guid, guid_text, static_cast<int>(sizeof(guid_text)));
       candidate.guid = guid_text;
-      char *mapping = SDL_GetGamepadMappingForID(ids[i]);
-      candidate.mapping = mapping ? mapping : "";
-      SDL_free(mapping);
-      if (scan.first.device.empty())
-        scan.first = candidate;
+      if (first.device.empty())
+        first = candidate;
       if (candidate.device == preferred)
-        scan.match = candidate;
+        match = candidate;
     }
   }
   SDL_free(ids);
+  scan = !match.device.empty() ? match : first;
+  if (!scan.device.empty() && !preferred.empty() && preferred != keyboard &&
+      scan.device != preferred)
+    std::cerr << "controller: configured device \"" << preferred
+              << "\" not found; binding \"" << scan.device << "\"\n";
   return scan;
 }
 
-void EnsureDefaultControllerConfig(
-    const std::filesystem::path &user_directory,
-    moderngekko::frontend::ControllerLayout requested_layout,
-    std::string_view preferred_device) {
-  using moderngekko::frontend::ControllerLayout;
-  using moderngekko::frontend::ControllerMapping;
+void EnsureControllerSetup(const std::filesystem::path &user_directory,
+                           std::string_view controller_class,
+                           std::string_view preferred_device) {
 
+  ApplyRuntimeSdlHints();
   if (!SDL_Init(SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC | SDL_INIT_GAMEPAD)) {
-    std::cerr << "controller: SDL init failed: " << SDL_GetError()
-              << "; keeping the existing profile\n";
+    std::cerr << "controller: SDL init failed: " << SDL_GetError() << '\n';
     return;
   }
 
   constexpr std::string_view keyboard_device = "DInput/0/Keyboard Mouse";
-  const ControllerScan scan = ScanControllers(preferred_device);
-  ControllerDevice chosen;
-  std::string device;
-  if (requested_layout == ControllerLayout::Keyboard) {
-    device = std::string(keyboard_device);
-  } else if (scan.found(preferred_device)) {
-    chosen = scan.match;
-    device = chosen.device;
-  } else if (!scan.first.device.empty()) {
-    // The configured pad is not here (asleep wireless pad, re-paired port,
-    // renamed driver path) but another one is. Bind that one and say so
-    // instead of leaving the profile pointing at a device that will never
-    // appear.
-    if (!preferred_device.empty() && preferred_device != keyboard_device)
-      std::cerr << "controller: configured device \"" << preferred_device
-                << "\" not found; using \"" << scan.first.device << "\"\n";
-    chosen = scan.first;
-    device = chosen.device;
-  }
+  const ControllerDevice chosen = ChooseControllerDevice(preferred_device);
+  std::string device = chosen.device.empty() ? std::string(keyboard_device)
+                                             : chosen.device;
 
-  const std::filesystem::path profile_path =
-      user_directory / "Config" / "GCPadNew.ini";
-  const std::string existing = ReadTextFile(profile_path);
-  const bool exists = !existing.empty();
-  const std::string existing_device =
-      moderngekko::frontend::ControllerProfileDevice(existing);
+  // One static profile. Written only when missing; never regenerated at launch.
+  std::string message;
+  if (!moderngekko::frontend::EnsureCanonicalPadProfile(user_directory, device,
+                                                       &message))
+    std::cerr << "controller configuration failed: " << message << '\n';
+  else if (!chosen.device.empty())
+    std::cerr << "controller configuration: " << message << '\n';
 
-  if (device.empty()) {
-    // No gamepad enumerated at all. Writing a profile here is what turned a
-    // sleeping wireless Xbox pad into a keyboard profile and zero input: the
-    // pad finished connecting a moment later and the game never saw it.
-    std::cerr << "controller: no gamepad enumerated (joysticks="
-              << scan.joysticks << " gamepads=" << scan.gamepads << "); "
-              << (exists ? "keeping existing " : "writing ")
-              << profile_path.filename().string() << '\n';
-    if (exists)
-      return;
-    std::string message;
-    if (moderngekko::frontend::GenerateControllerConfig(
-            user_directory, std::string(keyboard_device),
-            ControllerMapping{ControllerLayout::Keyboard, false}, &message))
-      std::cerr << "controller configuration: " << message << '\n';
-    else
-      std::cerr << "controller configuration failed: " << message << '\n';
-    return;
-  }
-
-  ControllerMapping mapping =
-      moderngekko::frontend::DetectControllerMapping(device, chosen.mapping,
-                                                     chosen.guid);
-  if (device == keyboard_device) {
-    mapping = {ControllerLayout::Keyboard, false};
-  } else if (requested_layout != ControllerLayout::Auto) {
-    mapping.layout = requested_layout;
-  }
-  if (mapping.layout == ControllerLayout::Keyboard)
-    mapping.swap_dpad_lr = false;
-
-  const bool regenerate = moderngekko::frontend::ControllerConfigNeedsRewrite(
-      existing, device, mapping, requested_layout);
+  // Layout class: user override wins; auto lets each pad decide from its SDL
+  // type in the input layer (no table, no name heuristic, no profile rewrite).
+  // The class travels to the runtime through RuntimeConfig; the input layer
+  // applies it once, per pad, at init.
 
   std::cerr << "controller: name=\"" << device << "\" guid=" << chosen.guid
-            << " layout="
-            << moderngekko::frontend::ControllerLayoutName(mapping.layout)
-            << " dpad=" << (mapping.swap_dpad_lr ? "swapped" : "normal") << '\n';
-
-  if (regenerate) {
-    std::string message;
-    if (moderngekko::frontend::GenerateControllerConfig(
-            user_directory, device, mapping, &message))
-      std::cerr << "controller configuration: " << message << '\n';
-    else
-      std::cerr << "controller configuration failed: " << message << '\n';
-  } else {
-    std::cerr << "controller: using existing " << profile_path.filename().string()
-              << " for " << existing_device << '\n';
-  }
-  // Deliberately no SDL_Quit() here. The subsystems initialised above are left
-  // running so the runtime's own SDL input backend (which calls SDL_Init with
-  // the same hints) reuses this exact driver set instead of re-initialising a
-  // second time after a full SDL_Quit; that teardown is what left HIDAPI pads
-  // enumerating while XInput/WGI pads did not. The runtime owns teardown.
+            << " class=" << controller_class
+            << " dpad=normal profile="
+            << (moderngekko::frontend::ControllerConfigExists(user_directory)
+                    ? "static"
+                    : "missing")
+            << '\n';
+  // Deliberately no SDL_Quit() here: the runtime's own SDL input backend calls
+  // SDL_Init with the same hints and reuses this driver set.
 }
 
 void Usage() {
@@ -486,19 +422,28 @@ int RunMain(int argc, char **argv) {
   }
 
   if (!netplay_role) {
-    using moderngekko::frontend::ControllerLayout;
-    ControllerLayout layout = ControllerLayout::Auto;
-    const std::string &layout_value =
-        controller_layout_override.empty() ? frontend_config.controller_layout
-                                           : controller_layout_override;
-    if (layout_value == "standard")
-      layout = ControllerLayout::Standard;
-    else if (layout_value == "nintendo")
-      layout = ControllerLayout::Nintendo;
-    else if (layout_value == "keyboard")
-      layout = ControllerLayout::Keyboard;
-    EnsureDefaultControllerConfig(config.user_directory, layout,
-                                  frontend_config.controller);
+    using moderngekko::frontend::ControllerClass;
+    ControllerClass controller_class = ControllerClass::Auto;
+    std::string preferred_device = frontend_config.controller;
+    const std::string &class_value =
+        controller_layout_override.empty()
+            ? frontend_config.controller_class
+            : controller_layout_override;
+    const std::string class_lower = [&] {
+      std::string value = class_value;
+      for (char &c : value)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+      return value;
+    }();
+    if (class_lower == "keyboard") {
+      preferred_device = "DInput/0/Keyboard Mouse";
+    } else if (!moderngekko::frontend::ParseControllerClass(class_lower,
+                                                            &controller_class)) {
+      controller_class = ControllerClass::Auto;
+    }
+    config.controller_class = class_lower.empty() ? "auto" : class_lower;
+    EnsureControllerSetup(config.user_directory, config.controller_class,
+                          preferred_device);
   }
 
 #ifdef MODERNGEKKO_DOL_PATCH_MANIFEST
@@ -606,8 +551,9 @@ int RunMain(int argc, char **argv) {
     frontend_config.controllers = options.controllers;
     frontend_config.controller = options.controllers.front();
     std::string controller_message;
-    if (!moderngekko::frontend::EnsureControllerConfig(
-            config.user_directory, options.controllers, &controller_message)) {
+    if (!moderngekko::frontend::EnsureCanonicalPadProfile(
+            config.user_directory, options.controllers.front(),
+            &controller_message)) {
       std::cerr << "controller configuration: " << controller_message << '\n';
       return 2;
     }

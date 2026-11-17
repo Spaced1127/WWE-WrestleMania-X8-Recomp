@@ -50,18 +50,21 @@ cover:
 - Keyboard (WASD)
 
 On the **CONTROLLER** page, select the active controller and choose a
-**Layout**:
+**Class**:
 
-- **Auto-detect** is the default. It swaps A/B and X/Y for Switch, Joy-Con,
-  Wii U and other Nintendo-layout names; everything else uses the standard
-  Xbox/PlayStation layout.
-- **Xbox / PlayStation (standard)** forces the standard layout.
-- **Nintendo (A/B swap)** fixes a pad whose face buttons are swapped, such as
-  an 8BitDo pad in Switch mode.
-- **Keyboard (WASD)** writes the keyboard profile.
+- **Auto (per pad type)** is the default. Each pad decides from the SDL
+  gamepad type; Switch Pro, Joy-Con and 8BitDo Switch-mode pads use the
+  Nintendo class, everything else positional.
+- **Positional (Xbox / PlayStation)** forces positional.
+- **Nintendo (A/B swap)** forces A<->B and X<->Y for pads whose labels differ.
+- **Keyboard (WASD)** is the last entry in the controller list.
 
-Press **Use this controller** to rewrite the profile with the selected layout.
-Existing custom profiles are left alone until you do.
+The profile is written once, on first run. It is never regenerated at launch,
+so a wireless pad that is still waking up keeps its bindings. If the pad in the
+profile is not connected, the game binds the first pad that is and says so in
+the log; a pad plugged in later is picked up without a restart.
+
+Press **Use this controller** only when you want to rewrite the profile.
 
 The runner logs one line at startup:
 `controller: name="…" guid=… layout=… dpad=…`. If a pad is still wrong, send

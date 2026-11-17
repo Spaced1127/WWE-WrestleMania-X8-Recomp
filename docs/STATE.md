@@ -504,6 +504,33 @@ Launcher-migration evidence: the launcher wrote both keys into the existing
 
 Release notes: `docs/release/release-notes-v0.1.3.md`.
 
+## Generic controller system v0.1.4 (2026-11-16)
+
+Replaced the per-device controller profiles with the canonical system; the
+shared design note for the other five projects is
+`docs/notes/controller-generic-design.md`.
+
+- One static `GCPadNew.ini` (SDL positional), written once and never rewritten
+  at launch.
+- Two classes, `positional` and `nintendo` (A<->B, X<->Y only), chosen per pad
+  from `SDL_GetGamepadType` with a single 8BitDo Switch-mode GUID fallback and
+  a `controller_class` override.
+- Removed: `DetectControllerMapping`, DualSense Edge / Xbox Elite tables, the
+  blanket `a>b` rule, the D-pad button-index correction, launch-time profile
+  generation and layout migration.
+- `EnsurePadBound()` binds the first enumerated pad when the configured one is
+  absent and logs the substitution; a 2 s watcher handles hot-plug without a
+  profile write.
+
+Verified: offline matrix passes; profile byte-identical across launches; custom
+profile preserved; `--controller-layout nintendo` logs `class=nintendo`;
+no-pad boot keeps the keyboard profile; shipped artifact boots at 59.94 fps
+with a clean stop and creates the raw card.
+
+Not verified: per-pad press tests and the hot-plug checklist (no physical pad
+attached during this build); the type-based classification was confirmed live
+on v0.1.3 (Xbox One and DualSense both `layout=standard dpad=normal`).
+
 ## Launcher parity (docs/15)
 
 `Launcher: shell ModernGekko-Template + WMX8 parity patch, theme WWE
